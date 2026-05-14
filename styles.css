@@ -5,8 +5,8 @@
   display: flex;
   gap: 2px;
   background: var(--background-primary, #ffffff);
-  color: var(--text-normal, #222);
-  border: 1px solid var(--background-modifier-border, #ccc);
+  color: var(--text-normal, #222222);
+  border: 1px solid var(--background-modifier-border, #cccccc);
   border-radius: 8px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   padding: 4px;
@@ -25,7 +25,7 @@
 .review-comment-type-btn {
   background: transparent;
   border: none;
-  color: var(--text-normal, #222);
+  color: var(--text-normal, #222222);
   padding: 5px 10px;
   border-radius: 5px;
   cursor: pointer;
@@ -38,7 +38,7 @@
 }
 
 .review-comment-type-btn:hover {
-  background: var(--background-modifier-hover, #eee);
+  background: var(--background-modifier-hover, #eeeeee);
 }
 
 .review-comment-type-btn .rc-icon {

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-review-comments",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Notion-style review comments for Obsidian (CriticMarkup storage).",
   "main": "main.js",
   "scripts": {

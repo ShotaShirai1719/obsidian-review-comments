@@ -1,7 +1,7 @@
 {
   "id": "review-comments",
   "name": "Review Comments",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "1.7.2",
   "description": "Notion-style review comments stored as CriticMarkup. AI-friendly format for LLM-assisted editing.",
   "author": "Shota Shirai",
