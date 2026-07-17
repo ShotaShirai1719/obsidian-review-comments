@@ -22,7 +22,7 @@ import { RangeSetBuilder } from "@codemirror/state";
 
 interface ReviewCommentsSettings {
   authorName: string;
-  dateFormat: "iso" | "japanese";
+  dateFormat: "english" | "iso" | "japanese";
 }
 
 const DEFAULT_SETTINGS: ReviewCommentsSettings = {
@@ -66,17 +66,18 @@ class CommentInputModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("review-comment-modal");
-    this.setTitle(`Add ${this.typeTag} comment`);
+    const typeLabel = TYPES.find((type) => type.tag === this.typeTag)?.label || this.typeTag;
+    this.setTitle(`Add ${typeLabel} comment`);
 
     contentEl.createEl("p", {
-      text: "複数行や箇条書きもそのまま入力できます。",
+      text: "You can use multiple lines and bullet points.",
       cls: "review-comment-modal-help",
     });
 
     const textarea = contentEl.createEl("textarea", {
       cls: "review-comment-modal-textarea",
     });
-    textarea.placeholder = "例:\n1. ここを修正したい\n・理由\n・補足";
+    textarea.placeholder = "Example:\n1. Revise this section\n- Reason\n- Additional details";
 
     const actions = contentEl.createDiv({
       cls: "review-comment-modal-actions",
@@ -186,6 +187,10 @@ export default class ReviewCommentsPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (this.settings.dateFormat === "japanese") {
+      this.settings.dateFormat = "english";
+      await this.saveSettings();
+    }
   }
 
   async saveSettings() {
@@ -199,7 +204,7 @@ export default class ReviewCommentsPlugin extends Plugin {
   addCommentToSelection(editor: Editor, typeTag: string = "NOTE") {
     const selection = editor.getSelection();
     if (!selection) {
-      new Notice("先にテキストを選択してください");
+      new Notice("Select some text first.");
       return;
     }
     if (
@@ -208,7 +213,7 @@ export default class ReviewCommentsPlugin extends Plugin {
       selection.includes("{>>") ||
       selection.includes("<<}")
     ) {
-      new Notice("選択範囲に既にコメント記法が含まれています");
+      new Notice("The selected text already contains comment markup.");
       return;
     }
 
@@ -218,7 +223,7 @@ export default class ReviewCommentsPlugin extends Plugin {
       const date = formatDate(new Date(), this.settings.dateFormat);
       const author = sanitizeAuthor(this.settings.authorName);
       const commentBody = this.escapeCommentBody(
-        body.trim() || "コメントを書く"
+        body.trim() || "Write a comment"
       );
       const wrapped = `{==${selection}==}{>>${author}|${date}|${typeTag}: ${commentBody}<<}`;
       editor.replaceRange(wrapped, from, to);
@@ -394,11 +399,20 @@ function sanitizeAuthor(name: string): string {
   return stripped || "you";
 }
 
-function formatDate(d: Date, format: "iso" | "japanese"): string {
+function formatDate(
+  d: Date,
+  format: ReviewCommentsSettings["dateFormat"]
+): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  if (format === "japanese") return `${y}年${m}月${day}日`;
+  if (format === "english") {
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(d);
+  }
   return `${y}-${m}-${day}`;
 }
 
@@ -523,7 +537,7 @@ class CommentsView extends ItemView {
     const mdView = this.getMarkdownView();
     if (!mdView) {
       container.createEl("p", {
-        text: "マークダウンファイルを開いてください",
+        text: "Open a Markdown file to review its comments.",
       });
       return;
     }
@@ -552,7 +566,7 @@ class CommentsView extends ItemView {
 
     if (matches.length === 0) {
       container.createEl("p", {
-        text: "コメントはまだありません。テキストを選択して上に出るバーから種類を選んでください。",
+        text: "No comments yet. Select text, then choose a comment type from the floating toolbar.",
         cls: "review-comment-empty",
       });
       return;
@@ -618,7 +632,7 @@ class ReviewCommentsSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Author name")
-      .setDesc("コメントに記録される名前")
+      .setDesc("Name recorded with each comment")
       .addText((text) =>
         text
           .setValue(this.plugin.settings.authorName)
@@ -632,24 +646,24 @@ class ReviewCommentsSettingTab extends PluginSettingTab {
       .setName("Date format")
       .addDropdown((dd) =>
         dd
-          .addOption("iso", "2026-05-13")
-          .addOption("japanese", "2026年05月13日")
+          .addOption("iso", "ISO: 2026-05-13")
+          .addOption("english", "English: May 13, 2026")
           .setValue(this.plugin.settings.dateFormat)
           .onChange(async (value: string) => {
-            this.plugin.settings.dateFormat = value as "iso" | "japanese";
+            this.plugin.settings.dateFormat = value as "english" | "iso";
             await this.plugin.saveSettings();
           })
       );
 
-    containerEl.createEl("h3", { text: "コメント種別" });
+    containerEl.createEl("h3", { text: "Comment types" });
     const list = containerEl.createEl("ul");
     for (const t of TYPES) {
       const li = list.createEl("li");
-      li.textContent = `${t.icon} ${t.label} → タグ: ${t.tag}（コマンド: Add ${t.label} comment）`;
+      li.textContent = `${t.icon} ${t.label} → Tag: ${t.tag} (Command: Add ${t.label} comment)`;
     }
 
     containerEl.createEl("p", {
-      text: "各タイプは個別コマンドとして登録されているので、設定→ホットキーで好きなショートカットを割り当てられます。",
+      text: "Each type is registered as a separate command, so you can assign shortcuts in Settings → Hotkeys.",
       cls: "setting-item-description",
     });
   }
