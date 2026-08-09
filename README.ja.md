@@ -23,7 +23,7 @@ npm install
 npm run build
 ```
 
-`npm run build` は `esbuild` で `main.ts`（および `src/i18n.ts`）をリポジトリ直下の `main.js` 1ファイルにプロダクションビルドする。既存の `manifest.json` と `styles.css` と合わせれば、Obsidianがプラグインを読み込むのに必要なファイルが揃う（配置先は下記の[インストール](#インストール)を参照）。
+`npm run build` は `esbuild` で `src/` 以下のTypeScriptソース（エントリポイントは `src/main.ts`）をリポジトリ直下の `main.js` 1ファイルにプロダクションビルドする。既存の `manifest.json` と `styles.css` と合わせれば、Obsidianがプラグインを読み込むのに必要なファイルが揃う（配置先は下記の[インストール](#インストール)を参照）。
 
 開発中は保存のたびに `main.js` を自動で再ビルドするウォッチモードを使うと便利:
 

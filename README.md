@@ -24,7 +24,7 @@ npm install
 npm run build
 ```
 
-`npm run build` runs a production `esbuild` bundle of `main.ts` (and `src/i18n.ts`) into a single `main.js` at the repo root. Together with the existing `manifest.json` and `styles.css`, that's everything Obsidian needs to load the plugin — see [Install](#install) below for where to put them.
+`npm run build` runs a production `esbuild` bundle of the TypeScript sources in `src/` (entry point `src/main.ts`) into a single `main.js` at the repo root. Together with the existing `manifest.json` and `styles.css`, that's everything Obsidian needs to load the plugin — see [Install](#install) below for where to put them.
 
 For active development, use watch mode instead, which rebuilds `main.js` automatically on save:
 
