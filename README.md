@@ -15,6 +15,8 @@ The original {==text==}{>>shirai|2026-05-13: please rewrite<<} has an issue.
 
 ## Build
 
+**Prerequisites:** [Node.js](https://nodejs.org/) 18+ (includes npm) and `git`.
+
 ```bash
 git clone https://github.com/ShotaShirai1719/obsidian-review-comments.git
 cd obsidian-review-comments
@@ -22,7 +24,15 @@ npm install
 npm run build
 ```
 
-This produces `main.js`.
+`npm run build` runs a production `esbuild` bundle of `main.ts` (and `src/i18n.ts`) into a single `main.js` at the repo root. Together with the existing `manifest.json` and `styles.css`, that's everything Obsidian needs to load the plugin — see [Install](#install) below for where to put them.
+
+For active development, use watch mode instead, which rebuilds `main.js` automatically on save:
+
+```bash
+npm run dev
+```
+
+If you symlinked the repo into your vault's plugins folder (see [Install](#install)), just reload Obsidian (`Ctrl/Cmd + R` in the developer console, or disable/re-enable the plugin) after each rebuild to pick up changes.
 
 ## Install
 
@@ -43,6 +53,10 @@ Then in Obsidian:
 
 1. Settings → Community plugins → enable **Review Comments**
 2. Settings → Review Comments → set `Author name` to your own name
+
+## Language
+
+The plugin UI (modal, notices, side panel, settings) is available in English, Japanese, Spanish, Chinese (Simplified), French, German, Portuguese, and Korean. By default it follows Obsidian's own display language (Settings → General → Language); you can override it under Settings → Review Comments → `Language`. Changing it takes effect immediately for most of the UI — reload Obsidian to also update command names and the ribbon icon tooltip.
 
 ## Usage
 
@@ -69,13 +83,6 @@ Pass the `.md` file directly to Claude Code or another LLM with a prompt like:
 > Apply the edits described in the CriticMarkup comments (`{==...==}{>>...<<}`) in this file. Remove the CriticMarkup once each comment has been applied, and restore the highlighted spans to plain text.
 
 This closes the loop: comment in Obsidian → hand off to an LLM → get a clean diff back.
-
-## Development
-
-```bash
-npm run dev   # watch mode
-npm run build # production build
-```
 
 ## License
 
