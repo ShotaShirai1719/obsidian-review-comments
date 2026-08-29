@@ -19,6 +19,7 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 import { RangeSetBuilder } from "@codemirror/state";
+import { t } from "./i18n";
 
 interface ReviewCommentsSettings {
   authorName: string;
@@ -34,14 +35,14 @@ const COMMENT_REGEX = /\{==([\s\S]+?)==\}\{>>([\s\S]+?)<<\}/g;
 const VIEW_TYPE_COMMENTS = "review-comments-view";
 
 const TYPES: { id: string; tag: string; label: string; icon: string }[] = [
-  { id: "ask", tag: "ASK", label: "Ask", icon: "❓" },
-  { id: "edit", tag: "EDIT", label: "Edit", icon: "✏️" },
-  { id: "praise", tag: "PRAISE", label: "Praise", icon: "👍" },
-  { id: "note", tag: "NOTE", label: "Note", icon: "💬" },
+  { id: "ask", tag: "ASK", label: t("typeAsk"), icon: "❓" },
+  { id: "edit", tag: "EDIT", label: t("typeEdit"), icon: "✏️" },
+  { id: "praise", tag: "PRAISE", label: t("typePraise"), icon: "👍" },
+  { id: "note", tag: "NOTE", label: t("typeNote"), icon: "💬" },
 ];
 
-const TYPE_ICON: Record<string, string> = TYPES.reduce((acc, t) => {
-  acc[t.tag] = t.icon;
+const TYPE_ICON: Record<string, string> = TYPES.reduce((acc, type) => {
+  acc[type.tag] = type.icon;
   return acc;
 }, {} as Record<string, string>);
 
@@ -66,27 +67,27 @@ class CommentInputModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("review-comment-modal");
-    this.setTitle(`Add ${this.typeTag} comment`);
+    this.setTitle(t("modalTitle")(this.typeTag));
 
     contentEl.createEl("p", {
-      text: "複数行や箇条書きもそのまま入力できます。",
+      text: t("modalHelp"),
       cls: "review-comment-modal-help",
     });
 
     const textarea = contentEl.createEl("textarea", {
       cls: "review-comment-modal-textarea",
     });
-    textarea.placeholder = "例:\n1. ここを修正したい\n・理由\n・補足";
+    textarea.placeholder = t("modalPlaceholder");
 
     const actions = contentEl.createDiv({
       cls: "review-comment-modal-actions",
     });
     const cancelBtn = actions.createEl("button", {
-      text: "Cancel",
+      text: t("cancel"),
       cls: "mod-muted",
     });
     const submitBtn = actions.createEl("button", {
-      text: "Add comment",
+      text: t("addComment"),
       cls: "mod-cta",
     });
 
@@ -141,22 +142,22 @@ export default class ReviewCommentsPlugin extends Plugin {
     console.log("[ReviewComments] onload");
     await this.loadSettings();
 
-    for (const t of TYPES) {
+    for (const type of TYPES) {
       this.addCommand({
-        id: `add-comment-${t.id}`,
-        name: `Add ${t.label} comment ${t.icon} to selection`,
+        id: `add-comment-${type.id}`,
+        name: t("commandAddComment")(type.label, type.icon),
         editorCallback: (editor: Editor) =>
-          this.addCommentToSelection(editor, t.tag),
+          this.addCommentToSelection(editor, type.tag),
       });
     }
 
     this.addCommand({
       id: "open-comments-panel",
-      name: "Open comments panel",
+      name: t("commandOpenPanel"),
       callback: () => this.activateView(),
     });
 
-    this.addRibbonIcon("message-circle", "Review Comments", () => {
+    this.addRibbonIcon("message-circle", t("ribbonTooltip"), () => {
       this.activateView();
     });
 
@@ -199,7 +200,7 @@ export default class ReviewCommentsPlugin extends Plugin {
   addCommentToSelection(editor: Editor, typeTag: string = "NOTE") {
     const selection = editor.getSelection();
     if (!selection) {
-      new Notice("先にテキストを選択してください");
+      new Notice(t("noticeSelectText"));
       return;
     }
     if (
@@ -208,7 +209,7 @@ export default class ReviewCommentsPlugin extends Plugin {
       selection.includes("{>>") ||
       selection.includes("<<}")
     ) {
-      new Notice("選択範囲に既にコメント記法が含まれています");
+      new Notice(t("noticeAlreadyCommented"));
       return;
     }
 
@@ -218,7 +219,7 @@ export default class ReviewCommentsPlugin extends Plugin {
       const date = formatDate(new Date(), this.settings.dateFormat);
       const author = sanitizeAuthor(this.settings.authorName);
       const commentBody = this.escapeCommentBody(
-        body.trim() || "コメントを書く"
+        body.trim() || t("emptyCommentBody")
       );
       const wrapped = `{==${selection}==}{>>${author}|${date}|${typeTag}: ${commentBody}<<}`;
       editor.replaceRange(wrapped, from, to);
@@ -248,18 +249,18 @@ export default class ReviewCommentsPlugin extends Plugin {
     document.body.appendChild(bar);
     this.floatingBar = bar;
 
-    for (const t of TYPES) {
+    for (const type of TYPES) {
       const btn = document.createElement("button");
       btn.className = "review-comment-type-btn";
-      btn.title = `${t.label} (insert ${t.tag})`;
-      btn.innerHTML = `<span class="rc-icon">${t.icon}</span><span class="rc-label">${t.label}</span>`;
+      btn.title = t("floatingBtnTooltip")(type.label, type.tag);
+      btn.innerHTML = `<span class="rc-icon">${type.icon}</span><span class="rc-label">${type.label}</span>`;
       btn.addEventListener("mousedown", (e) => e.preventDefault());
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         const mdView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (mdView && mdView.editor.getSelection()) {
-          this.addCommentToSelection(mdView.editor, t.tag);
+          this.addCommentToSelection(mdView.editor, type.tag);
         }
         this.hideFloatingBar();
       });
@@ -465,7 +466,7 @@ class CommentsView extends ItemView {
   }
 
   getDisplayText() {
-    return "Review Comments";
+    return t("panelTitle");
   }
 
   getIcon() {
@@ -518,12 +519,12 @@ class CommentsView extends ItemView {
   renderComments() {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
-    new Setting(container).setName("Review Comments").setHeading();
+    new Setting(container).setName(t("panelTitle")).setHeading();
 
     const mdView = this.getMarkdownView();
     if (!mdView) {
       container.createEl("p", {
-        text: "マークダウンファイルを開いてください",
+        text: t("panelOpenMarkdownFile"),
       });
       return;
     }
@@ -552,7 +553,7 @@ class CommentsView extends ItemView {
 
     if (matches.length === 0) {
       container.createEl("p", {
-        text: "コメントはまだありません。テキストを選択して上に出るバーから種類を選んでください。",
+        text: t("panelEmpty"),
         cls: "review-comment-empty",
       });
       return;
@@ -576,7 +577,7 @@ class CommentsView extends ItemView {
 
       const actions = card.createDiv({ cls: "review-comment-card-actions" });
       const jumpBtn = actions.createEl("button", {
-        text: "Jump",
+        text: t("jump"),
         cls: "review-comment-action-btn",
       });
       jumpBtn.addEventListener("click", (e) => {
@@ -585,7 +586,7 @@ class CommentsView extends ItemView {
       });
 
       const resolveBtn = actions.createEl("button", {
-        text: "Resolve",
+        text: t("resolve"),
         cls: "review-comment-action-btn review-comment-resolve-btn",
       });
       resolveBtn.addEventListener("click", (e) => {
@@ -617,8 +618,8 @@ class ReviewCommentsSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("Author name")
-      .setDesc("コメントに記録される名前")
+      .setName(t("settingAuthorName"))
+      .setDesc(t("settingAuthorNameDesc"))
       .addText((text) =>
         text
           .setValue(this.plugin.settings.authorName)
@@ -629,7 +630,7 @@ class ReviewCommentsSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Date format")
+      .setName(t("settingDateFormat"))
       .addDropdown((dd) =>
         dd
           .addOption("iso", "2026-05-13")
@@ -641,15 +642,15 @@ class ReviewCommentsSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "コメント種別" });
+    containerEl.createEl("h3", { text: t("settingTypesHeading") });
     const list = containerEl.createEl("ul");
-    for (const t of TYPES) {
+    for (const type of TYPES) {
       const li = list.createEl("li");
-      li.textContent = `${t.icon} ${t.label} → タグ: ${t.tag}（コマンド: Add ${t.label} comment）`;
+      li.textContent = t("settingTypeItem")(type.icon, type.label, type.tag);
     }
 
     containerEl.createEl("p", {
-      text: "各タイプは個別コマンドとして登録されているので、設定→ホットキーで好きなショートカットを割り当てられます。",
+      text: t("settingHotkeysHint"),
       cls: "setting-item-description",
     });
   }
