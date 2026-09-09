@@ -27,14 +27,15 @@ export async function renderIntoInlineContext(
 
 /**
  * 吹き出しボタンと、クリックで開閉するポップオーバーを container へ足す。
- * onDelete を渡すと右上に削除ボタンが付き、押すと記法を外してハイライトされて
- * いたテキストだけが残る。
+ * onEdit を渡すと右上に編集ボタン、onDelete を渡すと削除ボタンが付く。削除は
+ * 記法を外してハイライトされていたテキストだけを残す。
  */
 export function appendCommentBubble(
   container: HTMLElement,
   meta: ParsedMeta,
   i18n: I18n,
-  onDelete?: () => void
+  onDelete?: () => void,
+  onEdit?: () => void
 ) {
   container.addClass("review-comment-anchor");
   container.dataset.type = meta.type;
@@ -47,19 +48,40 @@ export function appendCommentBubble(
 
   const popover = container.createDiv({ cls: "review-comment-bubble-popover" });
 
-  if (onDelete) {
-    const deleteBtn = popover.createEl("button", {
-      cls: "review-comment-bubble-popover-close",
-      attr: { type: "button", "aria-label": i18n.t("bubble.delete") },
+  if (onEdit || onDelete) {
+    const actions = popover.createDiv({
+      cls: "review-comment-bubble-popover-actions",
     });
-    setIcon(deleteBtn, "x");
-    deleteBtn.addEventListener("mousedown", (e) => e.preventDefault());
-    deleteBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeAllCommentPopovers(container.ownerDocument);
-      onDelete();
-    });
+
+    if (onEdit) {
+      const editBtn = actions.createEl("button", {
+        cls: "review-comment-bubble-popover-btn",
+        attr: { type: "button", "aria-label": i18n.t("bubble.edit") },
+      });
+      setIcon(editBtn, "pencil");
+      editBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      editBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllCommentPopovers(container.ownerDocument);
+        onEdit();
+      });
+    }
+
+    if (onDelete) {
+      const deleteBtn = actions.createEl("button", {
+        cls: "review-comment-bubble-popover-btn review-comment-bubble-popover-delete",
+        attr: { type: "button", "aria-label": i18n.t("bubble.delete") },
+      });
+      setIcon(deleteBtn, "x");
+      deleteBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      deleteBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllCommentPopovers(container.ownerDocument);
+        onDelete();
+      });
+    }
   }
 
   const header = popover.createDiv({

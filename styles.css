@@ -265,10 +265,15 @@
   display: block;
 }
 
-.review-comment-bubble-popover-close {
+.review-comment-bubble-popover-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: flex;
+  gap: 2px;
+}
+
+.review-comment-bubble-popover-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -282,12 +287,17 @@
   padding: 0;
 }
 
-.review-comment-bubble-popover-close svg {
+.review-comment-bubble-popover-btn svg {
   width: 12px;
   height: 12px;
 }
 
-.review-comment-bubble-popover-close:hover {
+.review-comment-bubble-popover-btn:hover {
+  background: var(--interactive-hover);
+  color: var(--text-normal);
+}
+
+.review-comment-bubble-popover-delete:hover {
   /* --background-modifier-error はテーマによって濃い赤になり悪目立ちするため、
      他と同じ作り方で薄い赤を用意する */
   background: rgba(230, 70, 70, 0.15);
@@ -300,7 +310,7 @@
   color: var(--text-muted);
   font-weight: 500;
   margin-bottom: 4px;
-  padding-right: 20px;
+  padding-right: 44px;
 }
 
 .review-comment-bubble-popover-body {

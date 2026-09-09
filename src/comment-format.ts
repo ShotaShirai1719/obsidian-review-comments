@@ -89,3 +89,18 @@ export function prepareCommentBody(raw: string): PreparedBody {
     .replace(/<<\}/g, "<< }");
   return { body: escapeMultiline(escaped), adjusted: escaped !== trimmed };
 }
+
+/**
+ * コメント記法を組み立てる。投稿者と日付は元の値を残し、読めなかった場合だけ
+ * 呼び出し側が渡す控えで埋める。
+ */
+export function buildCommentMarkup(
+  rawHighlighted: string,
+  meta: ParsedMeta,
+  preparedBody: string,
+  fallback: { author: string; date: string }
+): string {
+  const author = meta.author || fallback.author;
+  const date = meta.date || fallback.date;
+  return `{==${rawHighlighted}==}{>>${author}|${date}|${meta.type}: ${preparedBody}<<}`;
+}

@@ -76,6 +76,8 @@ const en = {
   "notice.panelOpenFailed": "Could not open the comments panel",
   "bubble.show": "Show comment",
   "bubble.delete": "Delete comment",
+  "bubble.edit": "Edit comment",
+  "modal.editTitleTemplate": "Edit {type} comment",
 };
 
 export type StringKey = keyof typeof en;
@@ -130,6 +132,8 @@ const ja: Record<StringKey, string> = {
   "notice.panelOpenFailed": "コメントパネルを開けませんでした",
   "bubble.show": "コメントを表示",
   "bubble.delete": "コメントを削除",
+  "bubble.edit": "コメントを編集",
+  "modal.editTitleTemplate": "{type}コメントを編集",
 };
 
 const es: Record<StringKey, string> = {
@@ -183,6 +187,8 @@ const es: Record<StringKey, string> = {
   "notice.panelOpenFailed": "No se pudo abrir el panel de comentarios",
   "bubble.show": "Mostrar el comentario",
   "bubble.delete": "Eliminar el comentario",
+  "bubble.edit": "Editar el comentario",
+  "modal.editTitleTemplate": "Editar comentario de {type}",
 };
 
 const fr: Record<StringKey, string> = {
@@ -236,6 +242,8 @@ const fr: Record<StringKey, string> = {
   "notice.panelOpenFailed": "Impossible d'ouvrir le panneau des commentaires",
   "bubble.show": "Afficher le commentaire",
   "bubble.delete": "Supprimer le commentaire",
+  "bubble.edit": "Modifier le commentaire",
+  "modal.editTitleTemplate": "Modifier le commentaire {type}",
 };
 
 const de: Record<StringKey, string> = {
@@ -289,6 +297,8 @@ const de: Record<StringKey, string> = {
   "notice.panelOpenFailed": "Das Kommentar-Panel konnte nicht geöffnet werden",
   "bubble.show": "Kommentar anzeigen",
   "bubble.delete": "Kommentar löschen",
+  "bubble.edit": "Kommentar bearbeiten",
+  "modal.editTitleTemplate": "{type}-Kommentar bearbeiten",
 };
 
 const pt: Record<StringKey, string> = {
@@ -342,6 +352,8 @@ const pt: Record<StringKey, string> = {
   "notice.panelOpenFailed": "Não foi possível abrir o painel de comentários",
   "bubble.show": "Mostrar o comentário",
   "bubble.delete": "Excluir o comentário",
+  "bubble.edit": "Editar o comentário",
+  "modal.editTitleTemplate": "Editar comentário de {type}",
 };
 
 const ko: Record<StringKey, string> = {
@@ -393,6 +405,8 @@ const ko: Record<StringKey, string> = {
   "notice.panelOpenFailed": "코멘트 패널을 열 수 없습니다",
   "bubble.show": "코멘트 표시",
   "bubble.delete": "코멘트 삭제",
+  "bubble.edit": "코멘트 편집",
+  "modal.editTitleTemplate": "{type} 코멘트 편집",
 };
 
 const zh: Record<StringKey, string> = {
@@ -444,6 +458,8 @@ const zh: Record<StringKey, string> = {
   "notice.panelOpenFailed": "无法打开评论面板",
   "bubble.show": "显示评论",
   "bubble.delete": "删除评论",
+  "bubble.edit": "编辑评论",
+  "modal.editTitleTemplate": "编辑{type}评论",
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = {

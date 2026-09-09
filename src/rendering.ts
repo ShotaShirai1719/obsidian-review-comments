@@ -3,6 +3,7 @@ import {
   Component,
   MarkdownPostProcessorContext,
   MarkdownRenderChild,
+  Notice,
   TFile,
   editorInfoField,
 } from "obsidian";
@@ -18,9 +19,15 @@ import { RangeSetBuilder } from "@codemirror/state";
 import { COMMENT_REGEX } from "./constants";
 import {
   ParsedMeta,
+  buildCommentMarkup,
+  formatDate,
   parseMeta,
+  prepareCommentBody,
+  sanitizeAuthor,
   unescapeMultiline,
 } from "./comment-format";
+import { TYPES } from "./constants";
+import { CommentInputModal } from "./modal";
 import {
   appendCommentBubble,
   renderIntoInlineContext,
@@ -34,6 +41,7 @@ class CommentWidget extends WidgetType {
 
   constructor(
     private readonly highlighted: string,
+    private readonly rawHighlighted: string,
     private readonly meta: ParsedMeta,
     private readonly plugin: ReviewCommentsPlugin,
     private readonly sourcePath: string,
@@ -48,6 +56,7 @@ class CommentWidget extends WidgetType {
     // 比較に入れると演出が終わったあとに要素が作り直される
     return (
       other.highlighted === this.highlighted &&
+      other.rawHighlighted === this.rawHighlighted &&
       other.sourcePath === this.sourcePath &&
       other.range.from === this.range.from &&
       other.range.to === this.range.to &&
@@ -79,15 +88,36 @@ class CommentWidget extends WidgetType {
       this.renderComponent
     );
 
-    appendCommentBubble(wrapper, this.meta, this.plugin.i18n, () => {
-      view.dispatch({
-        changes: {
-          from: this.range.from,
-          to: this.range.to,
-          insert: this.highlighted,
-        },
-      });
-    });
+    appendCommentBubble(
+      wrapper,
+      this.meta,
+      this.plugin.i18n,
+      () => {
+        view.dispatch({
+          changes: {
+            from: this.range.from,
+            to: this.range.to,
+            insert: this.highlighted,
+          },
+        });
+      },
+      () => {
+        openCommentEditModal(this.plugin, this.meta, (preparedBody) => {
+          view.dispatch({
+            changes: {
+              from: this.range.from,
+              to: this.range.to,
+              insert: buildCommentMarkup(
+                this.rawHighlighted,
+                this.meta,
+                preparedBody,
+                fallbackMeta(this.plugin)
+              ),
+            },
+          });
+        });
+      }
+    );
     return wrapper;
   }
 
@@ -169,6 +199,7 @@ export function createCommentDecorationExtension(
               Decoration.replace({
                 widget: new CommentWidget(
                   unescapeMultiline(m[1]),
+                  m[1],
                   meta,
                   plugin,
                   sourcePath,
@@ -231,8 +262,32 @@ export async function renderCommentsInReadingMode(
       )
     );
 
-    appendCommentBubble(replaced, meta, plugin.i18n, () =>
-      deleteCommentInFile(plugin.app, ctx.sourcePath, fullMatch, highlighted)
+    const rawHighlighted = m[1];
+    appendCommentBubble(
+      replaced,
+      meta,
+      plugin.i18n,
+      () =>
+        void deleteCommentInFile(
+          plugin.app,
+          ctx.sourcePath,
+          fullMatch,
+          highlighted
+        ),
+      () =>
+        openCommentEditModal(plugin, meta, (preparedBody) =>
+          void replaceCommentInFile(
+            plugin.app,
+            ctx.sourcePath,
+            fullMatch,
+            buildCommentMarkup(
+              rawHighlighted,
+              meta,
+              preparedBody,
+              fallbackMeta(plugin)
+            )
+          )
+        )
     );
     blockEl.replaceWith(replaced);
   }
@@ -280,8 +335,32 @@ export async function renderCommentsInReadingMode(
         )
       );
 
-      appendCommentBubble(span, meta, plugin.i18n, () =>
-        deleteCommentInFile(plugin.app, ctx.sourcePath, fullMatch, highlighted)
+      const rawHighlighted = m[1];
+      appendCommentBubble(
+        span,
+        meta,
+        plugin.i18n,
+        () =>
+          void deleteCommentInFile(
+            plugin.app,
+            ctx.sourcePath,
+            fullMatch,
+            highlighted
+          ),
+        () =>
+          openCommentEditModal(plugin, meta, (preparedBody) =>
+            void replaceCommentInFile(
+              plugin.app,
+              ctx.sourcePath,
+              fullMatch,
+              buildCommentMarkup(
+                rawHighlighted,
+                meta,
+                preparedBody,
+                fallbackMeta(plugin)
+              )
+            )
+          )
       );
       frag.appendChild(span);
       lastIndex = m.index + m[0].length;
@@ -297,6 +376,42 @@ export async function renderCommentsInReadingMode(
   await Promise.all(renderTasks);
 }
 
+// 記法が読めなかったときに埋める投稿者と日付
+function fallbackMeta(plugin: ReviewCommentsPlugin) {
+  return {
+    author: sanitizeAuthor(plugin.settings.authorName),
+    date: formatDate(new Date(), plugin.settings.dateFormat),
+  };
+}
+
+// 本文を入れたモーダルを開き、書き込める形にしてから渡す
+function openCommentEditModal(
+  plugin: ReviewCommentsPlugin,
+  meta: ParsedMeta,
+  onSave: (preparedBody: string) => void
+) {
+  const typeLabel = plugin.i18n.t(
+    TYPES.find((t) => t.tag === meta.type)?.labelKey ?? "type.note"
+  );
+  new CommentInputModal(
+    plugin.app,
+    plugin.i18n,
+    typeLabel,
+    (body) => {
+      const prepared = prepareCommentBody(body);
+      if (!prepared.body) {
+        new Notice(plugin.i18n.t("notice.emptyCommentBody"));
+        return;
+      }
+      onSave(prepared.body);
+      if (prepared.adjusted) {
+        new Notice(plugin.i18n.t("notice.commentBodyAdjusted"));
+      }
+    },
+    { initialBody: meta.body }
+  ).open();
+}
+
 /**
  * 読み取りモードの削除。post processor には編集中の Editor が渡らないため、
  * Vault.process でファイルを読み込みから保存まで一続きに書き換える。
@@ -307,12 +422,22 @@ async function deleteCommentInFile(
   fullMatch: string,
   highlighted: string
 ) {
+  await replaceCommentInFile(app, sourcePath, fullMatch, highlighted);
+}
+
+// 記法を別の文字列へ差し替える。読み取りモードから書き込む唯一の経路
+async function replaceCommentInFile(
+  app: App,
+  sourcePath: string,
+  fullMatch: string,
+  replacement: string
+) {
   const file = app.vault.getAbstractFileByPath(sourcePath);
   if (!(file instanceof TFile)) return;
   await app.vault.process(file, (data) => {
     const at = data.indexOf(fullMatch);
     if (at === -1) return data;
-    // 位置で切り貼りする。String.replace はハイライト側の $& を置換指定として扱う
-    return data.slice(0, at) + highlighted + data.slice(at + fullMatch.length);
+    // 位置で切り貼りする。String.replace は置換側の $& を置換指定として扱う
+    return data.slice(0, at) + replacement + data.slice(at + fullMatch.length);
   });
 }

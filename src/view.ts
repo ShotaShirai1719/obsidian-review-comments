@@ -9,6 +9,7 @@ import type ReviewCommentsPlugin from "./main";
 import { COMMENT_REGEX, TYPE_ICON, VIEW_TYPE_COMMENTS } from "./constants";
 import {
   ParsedMeta,
+  buildCommentMarkup,
   formatDate,
   parseMeta,
   prepareCommentBody,
@@ -217,13 +218,15 @@ export class CommentsView extends ItemView {
       return;
     }
 
-    // 投稿者と日付は元の値を残す。読めなかった場合だけ現在の設定で補う
-    const author =
-      match.meta.author || sanitizeAuthor(this.plugin.settings.authorName);
-    const date =
-      match.meta.date ||
-      formatDate(new Date(), this.plugin.settings.dateFormat);
-    const rebuilt = `{==${match.rawHighlighted}==}{>>${author}|${date}|${match.meta.type}: ${prepared.body}<<}`;
+    const rebuilt = buildCommentMarkup(
+      match.rawHighlighted,
+      match.meta,
+      prepared.body,
+      {
+        author: sanitizeAuthor(this.plugin.settings.authorName),
+        date: formatDate(new Date(), this.plugin.settings.dateFormat),
+      }
+    );
 
     this.editingOffset = null;
     editor.replaceRange(rebuilt, startPos, endPos);
