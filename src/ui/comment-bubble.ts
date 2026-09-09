@@ -48,7 +48,7 @@ export function appendCommentBubble(
 
   const popover = container.createDiv({ cls: "review-comment-bubble-popover" });
 
-  if (onEdit || onDelete) {
+  {
     const actions = popover.createDiv({
       cls: "review-comment-bubble-popover-actions",
     });
@@ -73,7 +73,7 @@ export function appendCommentBubble(
         cls: "review-comment-bubble-popover-btn review-comment-bubble-popover-delete",
         attr: { type: "button", "aria-label": i18n.t("bubble.delete") },
       });
-      setIcon(deleteBtn, "x");
+      setIcon(deleteBtn, "trash-2");
       deleteBtn.addEventListener("mousedown", (e) => e.preventDefault());
       deleteBtn.addEventListener("click", (e) => {
         e.preventDefault();
@@ -82,6 +82,19 @@ export function appendCommentBubble(
         onDelete();
       });
     }
+
+    // × は閉じるだけ。閉じる形のアイコンに削除を割り当てると取り違える
+    const closeBtn = actions.createEl("button", {
+      cls: "review-comment-bubble-popover-btn",
+      attr: { type: "button", "aria-label": i18n.t("bubble.close") },
+    });
+    setIcon(closeBtn, "x");
+    closeBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAllCommentPopovers(container.ownerDocument);
+    });
   }
 
   const header = popover.createDiv({

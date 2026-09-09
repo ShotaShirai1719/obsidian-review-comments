@@ -78,6 +78,7 @@ const en = {
   "bubble.delete": "Delete comment",
   "bubble.edit": "Edit comment",
   "modal.editTitleTemplate": "Edit {type} comment",
+  "bubble.close": "Close",
 };
 
 export type StringKey = keyof typeof en;
@@ -134,6 +135,7 @@ const ja: Record<StringKey, string> = {
   "bubble.delete": "コメントを削除",
   "bubble.edit": "コメントを編集",
   "modal.editTitleTemplate": "{type}コメントを編集",
+  "bubble.close": "閉じる",
 };
 
 const es: Record<StringKey, string> = {
@@ -189,6 +191,7 @@ const es: Record<StringKey, string> = {
   "bubble.delete": "Eliminar el comentario",
   "bubble.edit": "Editar el comentario",
   "modal.editTitleTemplate": "Editar comentario de {type}",
+  "bubble.close": "Cerrar",
 };
 
 const fr: Record<StringKey, string> = {
@@ -244,6 +247,7 @@ const fr: Record<StringKey, string> = {
   "bubble.delete": "Supprimer le commentaire",
   "bubble.edit": "Modifier le commentaire",
   "modal.editTitleTemplate": "Modifier le commentaire {type}",
+  "bubble.close": "Fermer",
 };
 
 const de: Record<StringKey, string> = {
@@ -299,6 +303,7 @@ const de: Record<StringKey, string> = {
   "bubble.delete": "Kommentar löschen",
   "bubble.edit": "Kommentar bearbeiten",
   "modal.editTitleTemplate": "{type}-Kommentar bearbeiten",
+  "bubble.close": "Schließen",
 };
 
 const pt: Record<StringKey, string> = {
@@ -354,6 +359,7 @@ const pt: Record<StringKey, string> = {
   "bubble.delete": "Excluir o comentário",
   "bubble.edit": "Editar o comentário",
   "modal.editTitleTemplate": "Editar comentário de {type}",
+  "bubble.close": "Fechar",
 };
 
 const ko: Record<StringKey, string> = {
@@ -407,6 +413,7 @@ const ko: Record<StringKey, string> = {
   "bubble.delete": "코멘트 삭제",
   "bubble.edit": "코멘트 편집",
   "modal.editTitleTemplate": "{type} 코멘트 편집",
+  "bubble.close": "닫기",
 };
 
 const zh: Record<StringKey, string> = {
@@ -460,6 +467,7 @@ const zh: Record<StringKey, string> = {
   "bubble.delete": "删除评论",
   "bubble.edit": "编辑评论",
   "modal.editTitleTemplate": "编辑{type}评论",
+  "bubble.close": "关闭",
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = {
