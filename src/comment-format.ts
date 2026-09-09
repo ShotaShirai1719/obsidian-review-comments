@@ -43,6 +43,20 @@ export function formatDate(d: Date, format: "iso" | "japanese"): string {
   return `${y}-${m}-${day}`;
 }
 
-export function escapeCommentBody(body: string): string {
-  return body.replace(/<<}/g, "<< }");
+export interface PreparedBody {
+  body: string;
+  // 記法の退避か空行の詰めが起きたかどうか。呼び出し側が利用者へ知らせる
+  adjusted: boolean;
+}
+
+// コメント記法を壊す並びを本文から取り除く。空行はコメントを段落で分断する
+export function prepareCommentBody(raw: string): PreparedBody {
+  const trimmed = raw.trim();
+  const body = trimmed
+    .replace(/\n\s*\n+/g, "\n")
+    .replace(/\{==/g, "{ ==")
+    .replace(/==\}/g, "== }")
+    .replace(/\{>>/g, "{ >>")
+    .replace(/<<\}/g, "<< }");
+  return { body, adjusted: body !== trimmed };
 }

@@ -35,7 +35,8 @@ export function createCommentDecorationExtension() {
           const start = m.index;
           const highlightTextStart = start + 3;
           const highlightTextEnd = highlightTextStart + m[1].length;
-          const metaStart = highlightTextEnd + 2;
+          // "==}" の3文字を渡してから {>>...<<} を薄字にする
+          const metaStart = highlightTextEnd + 3;
           const end = start + m[0].length;
 
           builder.add(
@@ -63,7 +64,8 @@ export function renderCommentsInReadingMode(
   el: HTMLElement,
   _ctx: MarkdownPostProcessorContext
 ) {
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const doc = el.ownerDocument;
+  const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
   const textNodes: Text[] = [];
   let node: Node | null;
   while ((node = walker.nextNode())) {
@@ -77,17 +79,17 @@ export function renderCommentsInReadingMode(
     const regex = new RegExp(COMMENT_REGEX);
     let m: RegExpExecArray | null;
     let lastIndex = 0;
-    const frag = document.createDocumentFragment();
+    const frag = doc.createDocumentFragment();
     let matched = false;
 
     while ((m = regex.exec(text))) {
       matched = true;
       if (m.index > lastIndex) {
-        frag.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+        frag.appendChild(doc.createTextNode(text.slice(lastIndex, m.index)));
       }
 
       const meta = parseMeta(m[2]);
-      const span = document.createElement("span");
+      const span = doc.createElement("span");
       span.className = "review-comment-highlight";
       span.dataset.type = meta.type;
       span.textContent = m[1];
@@ -101,7 +103,7 @@ export function renderCommentsInReadingMode(
 
     if (!matched) continue;
     if (lastIndex < text.length) {
-      frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      frag.appendChild(doc.createTextNode(text.slice(lastIndex)));
     }
     tn.parentNode?.replaceChild(frag, tn);
   }

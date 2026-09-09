@@ -79,7 +79,10 @@ export class ReviewCommentsSettingTab extends PluginSettingTab {
         );
       });
 
-    containerEl.createEl("h3", { text: t("settings.commentTypesHeading") });
+    new Setting(containerEl)
+      .setName(t("settings.commentTypesHeading"))
+      .setHeading();
+
     const list = containerEl.createEl("ul");
     for (const type of TYPES) {
       const li = list.createEl("li");
@@ -88,6 +91,11 @@ export class ReviewCommentsSettingTab extends PluginSettingTab {
         icon: type.icon,
         label,
         tag: type.tag,
+        // 実際に登録されるコマンド名と同じ文字列を差し込む
+        command: t("command.addCommentTemplate", {
+          type: label,
+          icon: type.icon,
+        }),
       });
     }
 

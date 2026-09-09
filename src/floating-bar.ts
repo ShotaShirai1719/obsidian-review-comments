@@ -12,33 +12,14 @@ export class FloatingBar {
   }
 
   mount() {
-    const bar = document.createElement("div");
-    bar.className = "review-comment-floating-bar";
-    bar.style.display = "none";
-    document.body.appendChild(bar);
+    const doc = activeDocument;
+    const bar = doc.body.createDiv({
+      cls: "review-comment-floating-bar is-hidden",
+    });
     this.el = bar;
+    this.renderButtons();
 
-    for (const t of TYPES) {
-      const label = this.plugin.i18n.t(t.labelKey);
-      const btn = document.createElement("button");
-      btn.className = "review-comment-type-btn";
-      btn.title = `${label} (${t.tag})`;
-      btn.createSpan({ cls: "rc-icon", text: t.icon });
-      btn.createSpan({ cls: "rc-label", text: label });
-      btn.addEventListener("mousedown", (e) => e.preventDefault());
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const mdView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-        if (mdView && mdView.editor.getSelection()) {
-          this.plugin.addCommentToSelection(mdView.editor, t.tag);
-        }
-        this.hide();
-      });
-      bar.appendChild(btn);
-    }
-
-    this.plugin.registerDomEvent(document, "selectionchange", () => {
+    this.plugin.registerDomEvent(doc, "selectionchange", () => {
       if (this.selectionDebounce !== null) {
         window.clearTimeout(this.selectionDebounce);
       }
@@ -49,12 +30,50 @@ export class FloatingBar {
       capture: true,
     });
 
-    this.plugin.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
+    this.plugin.registerDomEvent(doc, "keydown", (e: KeyboardEvent) => {
       if (e.key === "Escape") this.hide();
     });
   }
 
+  // 言語を切り替えたときに呼ぶ。ボタンは一度作ると i18n の変更が届かない
+  refreshLabels() {
+    if (!this.el) return;
+    this.renderButtons();
+  }
+
+  private renderButtons() {
+    const bar = this.el;
+    if (!bar) return;
+    bar.empty();
+
+    for (const t of TYPES) {
+      const label = this.plugin.i18n.t(t.labelKey);
+      const btn = bar.createEl("button", {
+        cls: "review-comment-type-btn",
+        attr: { title: `${label} (${t.tag})` },
+      });
+      btn.createSpan({ cls: "rc-icon", text: t.icon });
+      btn.createSpan({ cls: "rc-label", text: label });
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mdView =
+          this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+        if (mdView && mdView.editor.getSelection()) {
+          this.plugin.addCommentToSelection(mdView.editor, t.tag);
+        }
+        this.hide();
+      });
+    }
+  }
+
   destroy() {
+    // 予約済みの再描画が unload 後に走らないようにする
+    if (this.selectionDebounce !== null) {
+      window.clearTimeout(this.selectionDebounce);
+      this.selectionDebounce = null;
+    }
     this.el?.remove();
     this.el = null;
   }
@@ -88,7 +107,7 @@ export class FloatingBar {
     }
 
     const bar = this.el;
-    bar.style.display = "flex";
+    bar.removeClass("is-hidden");
     const barWidth = bar.offsetWidth || 280;
     const barHeight = bar.offsetHeight || 36;
 
@@ -103,13 +122,13 @@ export class FloatingBar {
       top = rect.bottom + 6;
     }
 
-    bar.style.left = `${left}px`;
-    bar.style.top = `${top}px`;
+    bar.setCssProps({
+      "--rc-bar-left": `${left}px`,
+      "--rc-bar-top": `${top}px`,
+    });
   }
 
   private hide() {
-    if (this.el) {
-      this.el.style.display = "none";
-    }
+    this.el?.addClass("is-hidden");
   }
 }

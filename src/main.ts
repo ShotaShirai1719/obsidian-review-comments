@@ -1,7 +1,11 @@
 import { Editor, Notice, Plugin } from "obsidian";
 import { I18n, resolveLocale } from "./i18n";
 import { TYPES, VIEW_TYPE_COMMENTS } from "./constants";
-import { escapeCommentBody, formatDate, sanitizeAuthor } from "./comment-format";
+import {
+  formatDate,
+  prepareCommentBody,
+  sanitizeAuthor,
+} from "./comment-format";
 import { CommentInputModal } from "./modal";
 import { CommentsView } from "./view";
 import {
@@ -41,11 +45,11 @@ export default class ReviewCommentsPlugin extends Plugin {
     this.addCommand({
       id: "open-comments-panel",
       name: this.i18n.t("command.openPanel"),
-      callback: () => this.activateView(),
+      callback: () => void this.activateView(),
     });
 
     this.addRibbonIcon("message-circle", this.i18n.t("ribbon.tooltip"), () => {
-      this.activateView();
+      void this.activateView();
     });
 
     this.registerView(
@@ -67,13 +71,14 @@ export default class ReviewCommentsPlugin extends Plugin {
 
   onunload() {
     console.log("[ReviewComments] onunload");
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_COMMENTS);
+    // コミュニティプラグインの規約でリーフは閉じない。利用者の画面構成を壊すため
     this.floatingBar?.destroy();
     this.floatingBar = null;
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) as Partial<ReviewCommentsSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
   }
 
   async saveSettings() {
@@ -82,6 +87,16 @@ export default class ReviewCommentsPlugin extends Plugin {
 
   refreshLocale() {
     this.i18n.setLocale(resolveLocale(this.settings.language));
+    // 既に作られた DOM には i18n の変更が届かないため、作り直す側から声をかける
+    this.floatingBar?.refreshLabels();
+    for (const leaf of this.app.workspace.getLeavesOfType(
+      VIEW_TYPE_COMMENTS
+    )) {
+      const view = leaf.view;
+      if (view instanceof CommentsView) {
+        view.refreshLocale();
+      }
+    }
   }
 
   addCommentToSelection(editor: Editor, typeTag: string = "NOTE") {
@@ -108,12 +123,15 @@ export default class ReviewCommentsPlugin extends Plugin {
     new CommentInputModal(this.app, this.i18n, typeLabel, (body) => {
       const date = formatDate(new Date(), this.settings.dateFormat);
       const author = sanitizeAuthor(this.settings.authorName);
-      const commentBody = escapeCommentBody(
+      const prepared = prepareCommentBody(
         body.trim() || this.i18n.t("defaultCommentBody")
       );
-      const wrapped = `{==${selection}==}{>>${author}|${date}|${typeTag}: ${commentBody}<<}`;
+      const wrapped = `{==${selection}==}{>>${author}|${date}|${typeTag}: ${prepared.body}<<}`;
       editor.replaceRange(wrapped, from, to);
       editor.focus();
+      if (prepared.adjusted) {
+        new Notice(this.i18n.t("notice.commentBodyAdjusted"));
+      }
     }).open();
   }
 
@@ -121,14 +139,17 @@ export default class ReviewCommentsPlugin extends Plugin {
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(VIEW_TYPE_COMMENTS);
     if (existing.length > 0) {
-      workspace.revealLeaf(existing[0]);
+      await workspace.revealLeaf(existing[0]);
       return;
     }
 
-    const leaf = workspace.getRightLeaf(false);
-    if (leaf) {
-      await leaf.setViewState({ type: VIEW_TYPE_COMMENTS, active: true });
-      workspace.revealLeaf(leaf);
+    // 右サイドバーの空きタブが取れないことがあるため、新しいタブでも試す
+    const leaf = workspace.getRightLeaf(false) ?? workspace.getRightLeaf(true);
+    if (!leaf) {
+      new Notice(this.i18n.t("notice.panelOpenFailed"));
+      return;
     }
+    await leaf.setViewState({ type: VIEW_TYPE_COMMENTS, active: true });
+    await workspace.revealLeaf(leaf);
   }
 }

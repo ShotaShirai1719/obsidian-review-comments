@@ -27,8 +27,7 @@ flowchart TD
         M7 --> M8["FloatingBar.mount()"]
         M8 --> M9(["Plugin Ready"])
 
-        U1(["onunload()"]) --> U2["detachLeavesOfType(VIEW_TYPE_COMMENTS)"]
-        U2 --> U3["FloatingBar.destroy()"]
+        U1(["onunload()"]) --> U3["FloatingBar.destroy()"]
         U3 --> U4(["Plugin Unloaded"])
     end
 
@@ -41,7 +40,7 @@ flowchart TD
         C5 -->|Yes| C6["Notice(already has comment)"]
         C6 --> C4
         C5 -->|No| C7["Open CommentInputModal"]
-        C7 --> C8["onSubmit -> formatDate + sanitizeAuthor + escapeCommentBody"]
+        C7 --> C8["onSubmit -> formatDate + sanitizeAuthor + prepareCommentBody"]
         C8 --> C9["Wrap text as {==...==}{>>author|date|type: body<<}"]
         C9 --> C10["editor.replaceRange(...) + focus()"]
         C10 --> C4
@@ -77,8 +76,12 @@ flowchart TD
         V5 --> V4
         V4 -->|Done| V6{"matches.length === 0?"}
         V6 -->|Yes| V7["Render no-comments message"]
-        V6 -->|No| V8["Render comment cards + jump/resolve actions"]
-        V8 --> V9["Resolve -> replace full markup with highlighted text"]
+        V6 -->|No| V8["Render comment cards + jump/edit/resolve actions"]
+        V8 --> V9["Resolve -> replaceRange(highlighted) over the matched offsets"]
+        V8 --> V10["Edit -> textarea, Save -> rebuild markup over the matched offsets"]
+        V10 --> V11{"range still equals the matched markup?"}
+        V11 -->|No| V12["Notice(note changed) and re-render"]
+        V11 -->|Yes| V13["replaceRange(rebuilt) keeping author and date"]
     end
 
     %% Cross-file dependencies
@@ -118,7 +121,9 @@ classDiagram
         -HTMLDivElement el
         -number selectionDebounce
         +mount() void
+        +refreshLabels() void
         +destroy() void
+        -renderButtons() void
         -update() void
         -hide() void
     }
@@ -141,6 +146,10 @@ classDiagram
         +onClose() Promise
         +getMarkdownView() MarkdownView
         +jumpTo(MarkdownView mdView, number offset, number length) void
+        +resolveComment(MarkdownView mdView, CommentMatch match) void
+        +renderEditForm(HTMLElement card, MarkdownView mdView, CommentMatch match) void
+        +saveEdit(MarkdownView mdView, CommentMatch match, String input) void
+        +refreshLocale() void
         +renderComments() void
     }
 
@@ -191,7 +200,7 @@ classDiagram
         +parseMeta(String meta) ParsedMeta
         +sanitizeAuthor(String name) String
         +formatDate(Date d, DateFormat format) String
-        +escapeCommentBody(String body) String
+        +prepareCommentBody(String raw) PreparedBody
     }
 
     class Constants {

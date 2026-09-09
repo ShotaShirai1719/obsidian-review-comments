@@ -1,3 +1,5 @@
+import { moment } from "obsidian";
+
 export type Locale = "en" | "ja" | "es" | "zh" | "fr" | "de" | "pt" | "ko";
 export type LanguageSetting = "auto" | Locale;
 
@@ -62,8 +64,16 @@ const en = {
   "settings.commentTypesDesc":
     "Each type is registered as its own command, so you can assign a hotkey to it under Settings → Hotkeys.",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → tag: {tag} (command: Add {label} comment)",
+    "{icon} {label} → tag: {tag} (command: {command})",
   "locale.auto": "Auto (match Obsidian)",
+  "panel.edit": "Edit",
+  "panel.save": "Save",
+  "panel.cancel": "Cancel",
+  "panel.editHint": "Cmd/Ctrl + Enter to save, Esc to cancel",
+  "notice.emptyCommentBody": "The comment body is empty",
+  "notice.commentBodyAdjusted": "Comment markup in the body was escaped so the comment stays readable",
+  "notice.noteChangedDuringEdit": "The note changed while editing, so nothing was saved",
+  "notice.panelOpenFailed": "Could not open the comments panel",
 };
 
 export type StringKey = keyof typeof en;
@@ -106,8 +116,16 @@ const ja: Record<StringKey, string> = {
   "settings.commentTypesDesc":
     "各タイプは個別コマンドとして登録されているので、設定 → ホットキーで好きなショートカットを割り当てられます。",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → タグ: {tag}（コマンド: {label}コメントを追加）",
+    "{icon} {label} → タグ: {tag}（コマンド: {command}）",
   "locale.auto": "自動（Obsidianに合わせる）",
+  "panel.edit": "編集",
+  "panel.save": "保存",
+  "panel.cancel": "取消",
+  "panel.editHint": "Cmd/Ctrl + Enter で保存、Esc で取消",
+  "notice.emptyCommentBody": "コメント本文が空です",
+  "notice.commentBodyAdjusted": "本文に含まれるコメント記法を退避しました",
+  "notice.noteChangedDuringEdit": "編集中にノートが変わったため保存しませんでした",
+  "notice.panelOpenFailed": "コメントパネルを開けませんでした",
 };
 
 const es: Record<StringKey, string> = {
@@ -149,8 +167,16 @@ const es: Record<StringKey, string> = {
   "settings.commentTypesDesc":
     "Cada tipo se registra como su propio comando, así que puedes asignarle un atajo en Ajustes → Atajos de teclado.",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → etiqueta: {tag} (comando: Añadir comentario de {label})",
+    "{icon} {label} → etiqueta: {tag} (comando: {command})",
   "locale.auto": "Automático (según Obsidian)",
+  "panel.edit": "Editar",
+  "panel.save": "Guardar",
+  "panel.cancel": "Cancelar",
+  "panel.editHint": "Cmd/Ctrl + Enter para guardar, Esc para cancelar",
+  "notice.emptyCommentBody": "El cuerpo del comentario está vacío",
+  "notice.commentBodyAdjusted": "Se ha escapado el marcado de comentario incluido en el texto",
+  "notice.noteChangedDuringEdit": "La nota cambió durante la edición, no se guardó nada",
+  "notice.panelOpenFailed": "No se pudo abrir el panel de comentarios",
 };
 
 const fr: Record<StringKey, string> = {
@@ -192,8 +218,16 @@ const fr: Record<StringKey, string> = {
   "settings.commentTypesDesc":
     "Chaque type est enregistré comme une commande distincte ; vous pouvez donc lui assigner un raccourci dans Paramètres → Raccourcis clavier.",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → étiquette : {tag} (commande : Ajouter un commentaire {label})",
+    "{icon} {label} → balise : {tag} (commande : {command})",
   "locale.auto": "Automatique (selon Obsidian)",
+  "panel.edit": "Modifier",
+  "panel.save": "Enregistrer",
+  "panel.cancel": "Annuler",
+  "panel.editHint": "Cmd/Ctrl + Entrée pour enregistrer, Échap pour annuler",
+  "notice.emptyCommentBody": "Le corps du commentaire est vide",
+  "notice.commentBodyAdjusted": "Le balisage de commentaire présent dans le texte a été échappé",
+  "notice.noteChangedDuringEdit": "La note a changé pendant la modification, rien n'a été enregistré",
+  "notice.panelOpenFailed": "Impossible d'ouvrir le panneau des commentaires",
 };
 
 const de: Record<StringKey, string> = {
@@ -235,8 +269,16 @@ const de: Record<StringKey, string> = {
   "settings.commentTypesDesc":
     "Jeder Typ ist als eigener Befehl registriert, sodass du ihm unter Einstellungen → Hotkeys eine Tastenkombination zuweisen kannst.",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → Tag: {tag} (Befehl: {label}-Kommentar hinzufügen)",
+    "{icon} {label} → Tag: {tag} (Befehl: {command})",
   "locale.auto": "Automatisch (wie Obsidian)",
+  "panel.edit": "Bearbeiten",
+  "panel.save": "Speichern",
+  "panel.cancel": "Abbrechen",
+  "panel.editHint": "Cmd/Ctrl + Enter zum Speichern, Esc zum Abbrechen",
+  "notice.emptyCommentBody": "Der Kommentartext ist leer",
+  "notice.commentBodyAdjusted": "Kommentar-Markup im Text wurde maskiert",
+  "notice.noteChangedDuringEdit": "Die Notiz hat sich während der Bearbeitung geändert, es wurde nichts gespeichert",
+  "notice.panelOpenFailed": "Das Kommentar-Panel konnte nicht geöffnet werden",
 };
 
 const pt: Record<StringKey, string> = {
@@ -278,8 +320,16 @@ const pt: Record<StringKey, string> = {
   "settings.commentTypesDesc":
     "Cada tipo é registrado como seu próprio comando, então você pode atribuir um atalho em Configurações → Atalhos de teclado.",
   "settings.commentTypeItemTemplate":
-    "{icon} {label} → tag: {tag} (comando: Adicionar comentário de {label})",
+    "{icon} {label} → etiqueta: {tag} (comando: {command})",
   "locale.auto": "Automático (seguir o Obsidian)",
+  "panel.edit": "Editar",
+  "panel.save": "Salvar",
+  "panel.cancel": "Cancelar",
+  "panel.editHint": "Cmd/Ctrl + Enter para salvar, Esc para cancelar",
+  "notice.emptyCommentBody": "O corpo do comentário está vazio",
+  "notice.commentBodyAdjusted": "A marcação de comentário presente no texto foi escapada",
+  "notice.noteChangedDuringEdit": "A nota mudou durante a edição, nada foi salvo",
+  "notice.panelOpenFailed": "Não foi possível abrir o painel de comentários",
 };
 
 const ko: Record<StringKey, string> = {
@@ -319,8 +369,16 @@ const ko: Record<StringKey, string> = {
   "settings.commentTypesHeading": "댓글 유형",
   "settings.commentTypesDesc":
     "각 유형은 개별 명령으로 등록되므로 설정 → 단축키에서 원하는 단축키를 지정할 수 있습니다.",
-  "settings.commentTypeItemTemplate": "{icon} {label} → 태그: {tag} (명령: {label} 댓글 추가)",
+  "settings.commentTypeItemTemplate": "{icon} {label} → 태그: {tag} (명령: {command})",
   "locale.auto": "자동 (Obsidian 설정에 따름)",
+  "panel.edit": "편집",
+  "panel.save": "저장",
+  "panel.cancel": "취소",
+  "panel.editHint": "Cmd/Ctrl + Enter로 저장, Esc로 취소",
+  "notice.emptyCommentBody": "코멘트 내용이 비어 있습니다",
+  "notice.commentBodyAdjusted": "본문에 포함된 코멘트 표기를 이스케이프했습니다",
+  "notice.noteChangedDuringEdit": "편집 중에 노트가 변경되어 저장하지 않았습니다",
+  "notice.panelOpenFailed": "코멘트 패널을 열 수 없습니다",
 };
 
 const zh: Record<StringKey, string> = {
@@ -360,8 +418,16 @@ const zh: Record<StringKey, string> = {
   "settings.commentTypesHeading": "评论类型",
   "settings.commentTypesDesc":
     "每种类型都注册为独立命令，因此你可以在“设置 → 快捷键”中为其指定快捷键。",
-  "settings.commentTypeItemTemplate": "{icon} {label} → 标签：{tag}（命令：添加{label}评论）",
+  "settings.commentTypeItemTemplate": "{icon} {label} → 标签：{tag}（命令：{command}）",
   "locale.auto": "自动（跟随 Obsidian）",
+  "panel.edit": "编辑",
+  "panel.save": "保存",
+  "panel.cancel": "取消",
+  "panel.editHint": "Cmd/Ctrl + Enter 保存，Esc 取消",
+  "notice.emptyCommentBody": "评论内容为空",
+  "notice.commentBodyAdjusted": "已转义正文中的评论标记",
+  "notice.noteChangedDuringEdit": "编辑期间笔记已更改，未保存",
+  "notice.panelOpenFailed": "无法打开评论面板",
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = {
@@ -375,12 +441,40 @@ const STRINGS: Record<Locale, Record<StringKey, string>> = {
   ko,
 };
 
-function normalizeLocaleCode(code: string): string {
-  return code.trim().toLowerCase().split(/[-_]/)[0];
+// zh は簡体字なので、繁体字の地域を base だけ見て zh に寄せてはいけない
+const TRADITIONAL_CHINESE = ["zh-tw", "zh-hk", "zh-mo", "zh-hant"];
+
+const REGION_TO_LOCALE: Record<string, Locale> = {
+  "zh-cn": "zh",
+  "zh-sg": "zh",
+  "zh-hans": "zh",
+};
+
+function matchLocale(code: string): Locale | null {
+  const tag = code.trim().toLowerCase().replace(/_/g, "-");
+  if (REGION_TO_LOCALE[tag]) return REGION_TO_LOCALE[tag];
+  // 繁体字の利用者には簡体字より en の方が読める
+  if (TRADITIONAL_CHINESE.some((t) => tag === t || tag.startsWith(`${t}-`))) {
+    return null;
+  }
+  const base = tag.split("-")[0];
+  return (SUPPORTED_LOCALES as string[]).includes(base)
+    ? (base as Locale)
+    : null;
 }
 
 export function detectObsidianLocale(): Locale {
   const candidates: string[] = [];
+
+  // moment の locale は Obsidian の表示言語を追うため、これを最優先で見る
+  try {
+    const fromMoment = moment.locale();
+    if (fromMoment) candidates.push(fromMoment);
+  } catch {
+    // moment を参照できない環境では次の候補に回す
+  }
+
+  // moment が使えないときの控え。localStorage の language は Obsidian の内部値
   try {
     const stored = window.localStorage.getItem("language");
     if (stored) candidates.push(stored);
@@ -392,10 +486,8 @@ export function detectObsidianLocale(): Locale {
   }
 
   for (const candidate of candidates) {
-    const normalized = normalizeLocaleCode(candidate);
-    if ((SUPPORTED_LOCALES as string[]).includes(normalized)) {
-      return normalized as Locale;
-    }
+    const matched = matchLocale(candidate);
+    if (matched) return matched;
   }
   return "en";
 }

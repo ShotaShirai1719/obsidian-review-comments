@@ -5,8 +5,8 @@
   display: flex;
   gap: 2px;
   background: var(--background-primary, #ffffff);
-  color: var(--text-normal, #222);
-  border: 1px solid var(--background-modifier-border, #ccc);
+  color: var(--text-normal, #222222);
+  border: 1px solid var(--background-modifier-border, #cccccc);
   border-radius: 8px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   padding: 4px;
@@ -14,12 +14,18 @@
   font-family: var(--font-interface, system-ui);
   pointer-events: auto;
   white-space: nowrap;
+  left: var(--rc-bar-left, 0);
+  top: var(--rc-bar-top, 0);
+}
+
+.review-comment-floating-bar.is-hidden {
+  display: none;
 }
 
 .review-comment-type-btn {
   background: transparent;
   border: none;
-  color: var(--text-normal, #222);
+  color: var(--text-normal, #222222);
   padding: 5px 10px;
   border-radius: 5px;
   cursor: pointer;
@@ -32,7 +38,7 @@
 }
 
 .review-comment-type-btn:hover {
-  background: var(--background-modifier-hover, #eee);
+  background: var(--background-modifier-hover, #eeeeee);
 }
 
 .review-comment-type-btn .rc-icon {
@@ -188,4 +194,47 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Inline editing of a comment body */
+.review-comment-card-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.review-comment-card-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-size: 13px;
+  font-family: var(--font-text, inherit);
+  line-height: 1.5;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.review-comment-card-textarea:focus {
+  border-color: var(--interactive-accent);
+  outline: none;
+}
+
+.review-comment-card-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.review-comment-save-btn {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.review-comment-save-btn:hover {
+  background: var(--interactive-accent-hover, var(--interactive-accent));
+  color: var(--text-on-accent);
 }

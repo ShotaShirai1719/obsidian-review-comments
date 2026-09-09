@@ -56,13 +56,17 @@ Then in Obsidian:
 
 ## Language
 
-The plugin UI (modal, notices, side panel, settings) is available in English, Japanese, Spanish, Chinese (Simplified), French, German, Portuguese, and Korean. By default it follows Obsidian's own display language (Settings → General → Language); you can override it under Settings → Review Comments → `Language`. Changing it takes effect immediately for most of the UI — reload Obsidian to also update command names and the ribbon icon tooltip.
+The plugin UI is available in English, Japanese, Spanish, Chinese (Simplified), French, German, Portuguese, and Korean. Traditional Chinese is not translated yet, so `zh-TW` and `zh-HK` fall back to English rather than to Simplified Chinese. By default the UI follows Obsidian's own display language (Settings → General → Language); you can override it under Settings → Review Comments → `Language`.
+
+Switching the language updates the floating bar, the comment modal, notices, the side panel and its tab title, and the settings tab straight away. Command names and the ribbon icon tooltip are registered once at load, so reload Obsidian to update those.
 
 ## Usage
 
 1. Drag-select a span of text
 2. Click the **💬 Comment** button that appears near the selection
 3. Enter your comment in the modal. Multiline notes and bullet lists are supported.
+
+To change a comment you have already written, open the side panel, press **Edit** on its card, rewrite the body and press **Save** (`Cmd/Ctrl + Enter` saves, `Esc` cancels). The author and the date recorded on the comment are kept as they were. If the note itself changed while the card was open, the edit is refused instead of overwriting the wrong range.
 
 Alternatively:
 
