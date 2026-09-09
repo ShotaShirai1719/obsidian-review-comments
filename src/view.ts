@@ -13,10 +13,14 @@ import {
   parseMeta,
   prepareCommentBody,
   sanitizeAuthor,
+  unescapeMultiline,
 } from "./comment-format";
 
 interface CommentMatch {
+  // 画面に出す形。改行はエスケープを解いてある
   highlighted: string;
+  // ノートに書かれているままの形。記法を組み直すときはこちらを使う
+  rawHighlighted: string;
   meta: ParsedMeta;
   rawMeta: string;
   offset: number;
@@ -219,7 +223,7 @@ export class CommentsView extends ItemView {
     const date =
       match.meta.date ||
       formatDate(new Date(), this.plugin.settings.dateFormat);
-    const rebuilt = `{==${match.highlighted}==}{>>${author}|${date}|${match.meta.type}: ${prepared.body}<<}`;
+    const rebuilt = `{==${match.rawHighlighted}==}{>>${author}|${date}|${match.meta.type}: ${prepared.body}<<}`;
 
     this.editingOffset = null;
     editor.replaceRange(rebuilt, startPos, endPos);
@@ -251,7 +255,8 @@ export class CommentsView extends ItemView {
 
     while ((m = regex.exec(text))) {
       matches.push({
-        highlighted: m[1],
+        highlighted: unescapeMultiline(m[1]),
+        rawHighlighted: m[1],
         meta: parseMeta(m[2]),
         rawMeta: m[2],
         offset: m.index,

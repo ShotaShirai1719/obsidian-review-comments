@@ -36,14 +36,16 @@ flowchart TD
         C1(["Entry"]) --> C2{"selection exists?"}
         C2 -->|No| C3["Notice(select text first)"]
         C3 --> C4(["Exit"])
-        C2 -->|Yes| C5{"selection contains comment markers?"}
+        C2 -->|Yes| C4b["Trim leading/trailing newlines out of the selection"]
+        C4b --> C5{"selection contains comment markers?"}
         C5 -->|Yes| C6["Notice(already has comment)"]
         C6 --> C4
         C5 -->|No| C7["Open CommentInputModal"]
         C7 --> C8["onSubmit -> formatDate + sanitizeAuthor + prepareCommentBody"]
         C8 --> C9["Wrap text as {==...==}{>>author|date|type: body<<}"]
         C9 --> C10["editor.replaceRange(...) + focus()"]
-        C10 --> C4
+        C10 --> C11["Set pendingPulseOffset + place caret after the markup"]
+        C11 --> C4
     end
 
     %% Floating bar behavior
@@ -52,7 +54,8 @@ flowchart TD
         F2 -->|Iterate| F3["Create button + click handler"]
         F3 --> F2
         F2 -->|Done| F4["Register selectionchange/scroll/keydown events"]
-        F4 --> F5["update() with debounce"]
+        F4 --> F4b["Register compositionstart/update/end events"]
+        F4b --> F5["update() with debounce, skipped while composing"]
 
         F5 --> F6{"active MarkdownView + non-empty selection + valid range?"}
         F6 -->|No| F7["hide()"]
@@ -62,12 +65,21 @@ flowchart TD
 
     %% Rendering and panel flow
     subgraph SG5["src/rendering.ts + src/view.ts"]
-        R1(["renderCommentsInReadingMode(el)"]) --> R2{"Text node contains {== ?"}
+        R1(["renderCommentsInReadingMode(el)"]) --> R1b{"Block is exactly one comment?"}
+        R1b -->|Yes| R1c["Replace block with review-comment-block + bubble"]
+        R1b -->|No| R2{"Text node contains {== ?"}
         R2 -->|No| R3["Skip node"]
         R2 -->|Yes| R4{"while COMMENT_REGEX matches"}
-        R4 -->|Match| R5["parseMeta(m[2]) + create highlighted span + title"]
+        R4 -->|Match| R5["parseMeta(m[2]) + render highlighted markdown + appendCommentBubble"]
         R5 --> R4
         R4 -->|Done| R6["replace text node with fragment"]
+        R1c --> R7["Delete from the popover -> Vault.process over the file"]
+
+        W1(["buildDecorations(view)"]) --> W2{"cursor inside the comment or markup spans lines?"}
+        W2 -->|Yes| W3["Mark the raw markup so it can be edited in place"]
+        W2 -->|No| W4["Decoration.replace with CommentWidget"]
+        W4 --> W5["Widget renders the highlighted markdown + bubble popover"]
+        W5 --> W6["Delete from the popover -> view.dispatch over the range"]
 
         V1(["CommentsView.renderComments()"]) --> V2{"MarkdownView available?"}
         V2 -->|No| V3["Render open-markdown message"]
@@ -124,6 +136,8 @@ classDiagram
         +refreshLabels() void
         +destroy() void
         -renderButtons() void
+        -enterComposing() void
+        -clearCompositionEndGrace() void
         -update() void
         -hide() void
     }
@@ -200,6 +214,8 @@ classDiagram
         +parseMeta(String meta) ParsedMeta
         +sanitizeAuthor(String name) String
         +formatDate(Date d, DateFormat format) String
+        +escapeMultiline(String text) String
+        +unescapeMultiline(String text) String
         +prepareCommentBody(String raw) PreparedBody
     }
 
@@ -213,8 +229,23 @@ classDiagram
 
     class Rendering {
         <<service>>
-        +createCommentDecorationExtension() Object
-        +renderCommentsInReadingMode(HTMLElement el, MarkdownPostProcessorContext ctx) void
+        +createCommentDecorationExtension(ReviewCommentsPlugin plugin) Object
+        +renderCommentsInReadingMode(ReviewCommentsPlugin plugin, HTMLElement el, MarkdownPostProcessorContext ctx) void
+    }
+
+    class CommentWidget {
+        -Component renderComponent
+        +eq(CommentWidget other) boolean
+        +toDOM(EditorView view) HTMLElement
+        +destroy() void
+        +ignoreEvent() boolean
+    }
+
+    class CommentBubble {
+        <<service>>
+        +renderIntoInlineContext(App app, String markdown, HTMLElement target, String sourcePath, Component component) Promise
+        +appendCommentBubble(HTMLElement container, ParsedMeta meta, I18n i18n, Function onDelete) void
+        +closeAllCommentPopovers(Document doc) void
     }
 
     class EsbuildConfigScript {

@@ -5,6 +5,35 @@ export interface ParsedMeta {
   body: string;
 }
 
+/**
+ * CodeMirror の ViewPlugin 由来の Decoration.replace は改行をまたぐ範囲に使えない。
+ * 記法自体に生の改行を残さないよう、ハイライト対象と本文は保存時にここを通す。
+ */
+export function escapeMultiline(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
+}
+
+export function unescapeMultiline(text: string): string {
+  let result = "";
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\\" && i + 1 < text.length) {
+      const next = text[i + 1];
+      if (next === "n") {
+        result += "\n";
+        i++;
+        continue;
+      }
+      if (next === "\\") {
+        result += "\\";
+        i++;
+        continue;
+      }
+    }
+    result += text[i];
+  }
+  return result;
+}
+
 export function parseMeta(meta: string): ParsedMeta {
   const newFmt = meta.match(/^([^|]+)\|([^|]+)\|([A-Z]+):\s*([\s\S]*)$/);
   if (newFmt) {
@@ -12,7 +41,7 @@ export function parseMeta(meta: string): ParsedMeta {
       author: newFmt[1].trim(),
       date: newFmt[2].trim(),
       type: newFmt[3].trim(),
-      body: newFmt[4].trim(),
+      body: unescapeMultiline(newFmt[4].trim()),
     };
   }
 
@@ -22,11 +51,11 @@ export function parseMeta(meta: string): ParsedMeta {
       author: oldFmt[1].trim(),
       date: oldFmt[2].trim(),
       type: "NOTE",
-      body: oldFmt[3].trim(),
+      body: unescapeMultiline(oldFmt[3].trim()),
     };
   }
 
-  return { author: "", date: "", type: "NOTE", body: meta };
+  return { author: "", date: "", type: "NOTE", body: unescapeMultiline(meta) };
 }
 
 export function sanitizeAuthor(name: string): string {
@@ -44,19 +73,19 @@ export function formatDate(d: Date, format: "iso" | "japanese"): string {
 }
 
 export interface PreparedBody {
+  // ノートへ書き込む形。改行はエスケープ済み
   body: string;
-  // 記法の退避か空行の詰めが起きたかどうか。呼び出し側が利用者へ知らせる
+  // 記法の退避が起きたかどうか。呼び出し側が利用者へ知らせる
   adjusted: boolean;
 }
 
-// コメント記法を壊す並びを本文から取り除く。空行はコメントを段落で分断する
+// コメント記法を壊す並びを本文から取り除き、改行をエスケープして1行に収める
 export function prepareCommentBody(raw: string): PreparedBody {
   const trimmed = raw.trim();
-  const body = trimmed
-    .replace(/\n\s*\n+/g, "\n")
+  const escaped = trimmed
     .replace(/\{==/g, "{ ==")
     .replace(/==\}/g, "== }")
     .replace(/\{>>/g, "{ >>")
     .replace(/<<\}/g, "<< }");
-  return { body, adjusted: body !== trimmed };
+  return { body: escapeMultiline(escaped), adjusted: escaped !== trimmed };
 }

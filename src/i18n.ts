@@ -74,6 +74,8 @@ const en = {
   "notice.commentBodyAdjusted": "Comment markup in the body was escaped so the comment stays readable",
   "notice.noteChangedDuringEdit": "The note changed while editing, so nothing was saved",
   "notice.panelOpenFailed": "Could not open the comments panel",
+  "bubble.show": "Show comment",
+  "bubble.delete": "Delete comment",
 };
 
 export type StringKey = keyof typeof en;
@@ -126,6 +128,8 @@ const ja: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "本文に含まれるコメント記法を退避しました",
   "notice.noteChangedDuringEdit": "編集中にノートが変わったため保存しませんでした",
   "notice.panelOpenFailed": "コメントパネルを開けませんでした",
+  "bubble.show": "コメントを表示",
+  "bubble.delete": "コメントを削除",
 };
 
 const es: Record<StringKey, string> = {
@@ -177,6 +181,8 @@ const es: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "Se ha escapado el marcado de comentario incluido en el texto",
   "notice.noteChangedDuringEdit": "La nota cambió durante la edición, no se guardó nada",
   "notice.panelOpenFailed": "No se pudo abrir el panel de comentarios",
+  "bubble.show": "Mostrar el comentario",
+  "bubble.delete": "Eliminar el comentario",
 };
 
 const fr: Record<StringKey, string> = {
@@ -228,6 +234,8 @@ const fr: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "Le balisage de commentaire présent dans le texte a été échappé",
   "notice.noteChangedDuringEdit": "La note a changé pendant la modification, rien n'a été enregistré",
   "notice.panelOpenFailed": "Impossible d'ouvrir le panneau des commentaires",
+  "bubble.show": "Afficher le commentaire",
+  "bubble.delete": "Supprimer le commentaire",
 };
 
 const de: Record<StringKey, string> = {
@@ -279,6 +287,8 @@ const de: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "Kommentar-Markup im Text wurde maskiert",
   "notice.noteChangedDuringEdit": "Die Notiz hat sich während der Bearbeitung geändert, es wurde nichts gespeichert",
   "notice.panelOpenFailed": "Das Kommentar-Panel konnte nicht geöffnet werden",
+  "bubble.show": "Kommentar anzeigen",
+  "bubble.delete": "Kommentar löschen",
 };
 
 const pt: Record<StringKey, string> = {
@@ -330,6 +340,8 @@ const pt: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "A marcação de comentário presente no texto foi escapada",
   "notice.noteChangedDuringEdit": "A nota mudou durante a edição, nada foi salvo",
   "notice.panelOpenFailed": "Não foi possível abrir o painel de comentários",
+  "bubble.show": "Mostrar o comentário",
+  "bubble.delete": "Excluir o comentário",
 };
 
 const ko: Record<StringKey, string> = {
@@ -379,6 +391,8 @@ const ko: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "본문에 포함된 코멘트 표기를 이스케이프했습니다",
   "notice.noteChangedDuringEdit": "편집 중에 노트가 변경되어 저장하지 않았습니다",
   "notice.panelOpenFailed": "코멘트 패널을 열 수 없습니다",
+  "bubble.show": "코멘트 표시",
+  "bubble.delete": "코멘트 삭제",
 };
 
 const zh: Record<StringKey, string> = {
@@ -428,6 +442,8 @@ const zh: Record<StringKey, string> = {
   "notice.commentBodyAdjusted": "已转义正文中的评论标记",
   "notice.noteChangedDuringEdit": "编辑期间笔记已更改，未保存",
   "notice.panelOpenFailed": "无法打开评论面板",
+  "bubble.show": "显示评论",
+  "bubble.delete": "删除评论",
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = {

@@ -10,8 +10,10 @@ Notion-style review comments for Obsidian. Select text, click the floating butto
 The original {==text==}{>>shirai|2026-05-13: please rewrite<<} has an issue.
 ```
 
-- `{==...==}` — highlighted span (rendered in yellow)
+- `{==...==}` — highlighted span
 - `{>>author|date: comment<<}` — comment metadata
+
+In the note itself the markup is not shown. The highlighted span is rendered with a small bubble icon next to it, and clicking the icon opens a popover with the comment and a delete button. Put the cursor inside the span and the raw markup appears, so it can still be edited by hand. Newlines inside a comment are stored as `\n`, which keeps one comment on one line and keeps the surrounding Markdown intact.
 
 ## Build
 

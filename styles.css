@@ -45,24 +45,268 @@
   font-size: 14px;
 }
 
-/* Highlights (reading mode + live preview) */
+/*
+ * Highlights (reading mode + live preview)
+ * 色は Obsidian の名前付きアクセントカラー変数を color-mix で薄めて使い、テーマに
+ * 追従させる。color-mix を解釈できない環境向けに直前の rgba を控えとして残す。
+ * 既定の NOTE 色は Obsidian 標準の ==highlight== とほぼ同じ黄色になるため、下の
+ * 破線で色以外の見分けを付ける。
+ */
 .review-comment-highlight,
-.review-comment-highlight-live {
-  background-color: rgba(255, 235, 100, 0.4);
+.review-comment-highlight-live,
+.review-comment-widget {
+  --review-comment-accent: var(--color-yellow, #ffdd55);
+  background-color: rgba(255, 221, 85, 0.35);
+  background-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 30%,
+    transparent
+  );
+  border-bottom: 2px dashed rgba(180, 150, 0, 0.55);
+  border-bottom: 2px dashed
+    color-mix(in srgb, var(--review-comment-accent) 75%, transparent);
   border-radius: 2px;
   padding: 0 2px;
 }
 
-.review-comment-highlight[data-type="ASK"] {
-  background-color: rgba(120, 180, 255, 0.35);
+/* 見出しは本文よりフォントが大きく、本文基準の破線をそのまま引くと不釣り合いに
+   なる。外枠の破線は消し、見出し自身の下に em 基準の太さで引き直す */
+.review-comment-widget:has(
+    > .review-comment-widget-content > :is(h1, h2, h3, h4, h5, h6)
+  ),
+.review-comment-highlight:has(
+    > .review-comment-highlight-content > :is(h1, h2, h3, h4, h5, h6)
+  ) {
+  border-bottom: none;
 }
 
-.review-comment-highlight[data-type="EDIT"] {
-  background-color: rgba(255, 170, 100, 0.4);
+.review-comment-widget-content > :is(h1, h2, h3, h4, h5, h6),
+.review-comment-highlight-content > :is(h1, h2, h3, h4, h5, h6) {
+  border-bottom: 0.08em dashed rgba(180, 150, 0, 0.55);
+  border-bottom: 0.08em dashed
+    color-mix(in srgb, var(--review-comment-accent) 75%, transparent);
 }
 
-.review-comment-highlight[data-type="PRAISE"] {
-  background-color: rgba(160, 230, 160, 0.4);
+.review-comment-widget:has(
+    > .review-comment-widget-content > :is(h1, h2, h3, h4, h5, h6)
+  )
+  > .review-comment-bubble-btn,
+.review-comment-highlight:has(
+    > .review-comment-highlight-content > :is(h1, h2, h3, h4, h5, h6)
+  )
+  > .review-comment-bubble-btn {
+  width: 26px;
+  height: 26px;
+}
+
+.review-comment-anchor[data-type="ASK"] {
+  --review-comment-accent: var(--color-blue, #4a90e2);
+  background-color: rgba(74, 144, 226, 0.22);
+  background-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 20%,
+    transparent
+  );
+  border-bottom-color: rgba(74, 144, 226, 0.6);
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 70%,
+    transparent
+  );
+}
+
+.review-comment-anchor[data-type="EDIT"] {
+  --review-comment-accent: var(--color-orange, #f5a623);
+  background-color: rgba(245, 166, 35, 0.25);
+  background-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 25%,
+    transparent
+  );
+  border-bottom-color: rgba(245, 166, 35, 0.65);
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 75%,
+    transparent
+  );
+}
+
+.review-comment-anchor[data-type="PRAISE"] {
+  --review-comment-accent: var(--color-green, #7ed321);
+  background-color: rgba(126, 211, 33, 0.25);
+  background-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 25%,
+    transparent
+  );
+  border-bottom-color: rgba(126, 211, 33, 0.65);
+  border-bottom-color: color-mix(
+    in srgb,
+    var(--review-comment-accent) 75%,
+    transparent
+  );
+}
+
+/* Live preview widget: 記法を消して中身を Markdown として描き直したもの */
+.review-comment-widget {
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+/* 挿入直後の着地点を示す演出。背景色には触れず輪郭だけを明滅させる。
+   fill-mode を指定しないので、再生後は自然に元の見た目へ戻る */
+@keyframes review-comment-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  15%,
+  55% {
+    box-shadow: 0 0 0 5px
+      color-mix(
+        in srgb,
+        var(--review-comment-accent, #ffdd55) 80%,
+        transparent
+      );
+  }
+  35%,
+  75% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.review-comment-widget-pulse {
+  animation: review-comment-pulse 1.4s ease-in-out;
+}
+
+.review-comment-widget-content,
+.review-comment-highlight-content {
+  display: inline;
+}
+
+/* 見出しやリストを丸ごと囲んだ場合も、地の文と同じ行へ流し込む。将来の描画で
+   増えるタグにも追随できるよう、直接の子は種類を問わず inline にする */
+.review-comment-widget-content > *,
+.review-comment-highlight-content > * {
+  display: inline;
+  margin: 0;
+}
+
+/* Reading view: ブロックごとコメントで囲んだケース */
+.review-comment-block {
+  position: relative;
+  display: block;
+  background-color: rgba(255, 235, 100, 0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin: 0.2em 0;
+}
+
+.review-comment-block-content {
+  display: inline;
+}
+
+.review-comment-block-content > :first-child {
+  margin-top: 0;
+}
+
+.review-comment-block-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* 吹き出しボタンと、クリックで開閉するポップオーバー */
+.review-comment-bubble-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 3px;
+  border-radius: 50%;
+  border: none;
+  background: var(--background-modifier-hover, #eeeeee);
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  vertical-align: middle;
+}
+
+.review-comment-bubble-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.review-comment-bubble-btn:hover {
+  background: var(--interactive-hover);
+  color: var(--text-normal);
+}
+
+.review-comment-bubble-popover {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  margin-top: 4px;
+  min-width: 220px;
+  max-width: 360px;
+  background: var(--background-primary, #ffffff);
+  border: 1px solid var(--background-modifier-border, #cccccc);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  padding: 8px 10px;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.review-comment-bubble-popover.is-open {
+  display: block;
+}
+
+.review-comment-bubble-popover-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.review-comment-bubble-popover-close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.review-comment-bubble-popover-close:hover {
+  /* --background-modifier-error はテーマによって濃い赤になり悪目立ちするため、
+     他と同じ作り方で薄い赤を用意する */
+  background: rgba(230, 70, 70, 0.15);
+  background: color-mix(in srgb, var(--text-error, #e64646) 15%, transparent);
+  color: var(--text-error, #e64646);
+}
+
+.review-comment-bubble-popover-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 4px;
+  padding-right: 20px;
+}
+
+.review-comment-bubble-popover-body {
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .review-comment-meta-live {

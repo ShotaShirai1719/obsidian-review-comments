@@ -2,10 +2,16 @@ import { MarkdownView } from "obsidian";
 import type ReviewCommentsPlugin from "./main";
 import { TYPES } from "./constants";
 
+/** compositionend のあと、compositionstart が再発火しないか待つ時間 */
+const COMPOSITION_END_GRACE_MS = 150;
+
 export class FloatingBar {
   private readonly plugin: ReviewCommentsPlugin;
   private el: HTMLDivElement | null = null;
   private selectionDebounce: number | null = null;
+  // 日本語入力の変換中は true。変換候補の下線が選択として拾われるのを避ける
+  private isComposing = false;
+  private compositionEndGrace: number | null = null;
 
   constructor(plugin: ReviewCommentsPlugin) {
     this.plugin = plugin;
@@ -20,10 +26,29 @@ export class FloatingBar {
     this.renderButtons();
 
     this.plugin.registerDomEvent(doc, "selectionchange", () => {
+      if (this.isComposing) return;
       if (this.selectionDebounce !== null) {
         window.clearTimeout(this.selectionDebounce);
       }
       this.selectionDebounce = window.setTimeout(() => this.update(), 80);
+    });
+
+    // 変換中は候補の文字列が選択として見えてバーがちらつく。変換の間は隠す。
+    // スペースキーで候補を送るときは compositionend の直後に compositionstart が
+    // 再発火するため、compositionend は少し待ってから反映する
+    this.plugin.registerDomEvent(doc, "compositionstart", () =>
+      this.enterComposing()
+    );
+    this.plugin.registerDomEvent(doc, "compositionupdate", () =>
+      this.enterComposing()
+    );
+    this.plugin.registerDomEvent(doc, "compositionend", () => {
+      this.clearCompositionEndGrace();
+      this.compositionEndGrace = window.setTimeout(() => {
+        this.compositionEndGrace = null;
+        this.isComposing = false;
+        this.update();
+      }, COMPOSITION_END_GRACE_MS);
     });
 
     this.plugin.registerDomEvent(window, "scroll", () => this.hide(), {
@@ -60,10 +85,10 @@ export class FloatingBar {
         e.stopPropagation();
         const mdView =
           this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+        this.hide();
         if (mdView && mdView.editor.getSelection()) {
           this.plugin.addCommentToSelection(mdView.editor, t.tag);
         }
-        this.hide();
       });
     }
   }
@@ -74,12 +99,30 @@ export class FloatingBar {
       window.clearTimeout(this.selectionDebounce);
       this.selectionDebounce = null;
     }
+    this.clearCompositionEndGrace();
     this.el?.remove();
     this.el = null;
   }
 
+  private enterComposing() {
+    this.clearCompositionEndGrace();
+    this.isComposing = true;
+    this.hide();
+  }
+
+  private clearCompositionEndGrace() {
+    if (this.compositionEndGrace === null) return;
+    window.clearTimeout(this.compositionEndGrace);
+    this.compositionEndGrace = null;
+  }
+
   private update() {
     if (!this.el) return;
+
+    if (this.isComposing) {
+      this.hide();
+      return;
+    }
 
     const mdView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (!mdView) {

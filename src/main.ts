@@ -2,6 +2,7 @@ import { Editor, Notice, Plugin } from "obsidian";
 import { I18n, resolveLocale } from "./i18n";
 import { TYPES, VIEW_TYPE_COMMENTS } from "./constants";
 import {
+  escapeMultiline,
   formatDate,
   prepareCommentBody,
   sanitizeAuthor,
@@ -17,11 +18,14 @@ import {
   createCommentDecorationExtension,
   renderCommentsInReadingMode,
 } from "./rendering";
+import { closeAllCommentPopovers } from "./ui/comment-bubble";
 import { FloatingBar } from "./floating-bar";
 
 export default class ReviewCommentsPlugin extends Plugin {
   settings: ReviewCommentsSettings = DEFAULT_SETTINGS;
   i18n: I18n = new I18n("en");
+  // 直後に吹き出しへ変わる新規コメントの開始位置。1回だけ消費して演出を出す
+  pendingPulseOffset: number | null = null;
   private floatingBar: FloatingBar | null = null;
 
   async onload() {
@@ -57,11 +61,18 @@ export default class ReviewCommentsPlugin extends Plugin {
       (leaf) => new CommentsView(leaf, this)
     );
 
-    this.registerEditorExtension([createCommentDecorationExtension()]);
+    this.registerEditorExtension([createCommentDecorationExtension(this)]);
 
     this.registerMarkdownPostProcessor((el, ctx) =>
-      renderCommentsInReadingMode(el, ctx)
+      renderCommentsInReadingMode(this, el, ctx)
     );
+
+    this.registerDomEvent(activeDocument, "click", (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.closest(".review-comment-anchor")) {
+        closeAllCommentPopovers();
+      }
+    });
 
     this.floatingBar = new FloatingBar(this);
     this.floatingBar.mount();
@@ -100,7 +111,18 @@ export default class ReviewCommentsPlugin extends Plugin {
   }
 
   addCommentToSelection(editor: Editor, typeTag: string = "NOTE") {
-    const selection = editor.getSelection();
+    const rawSelection = editor.getSelection();
+
+    // 行全体を選択すると前後の改行まで記法の内側へ入り、その改行が担っていた
+    // 行の区切りが消えて隣の行と繋がる。先頭を切ってから末尾を見ることで、
+    // 改行だけを選んだときに前後の除去量が重なるのを避ける
+    const leadingNewline = rawSelection.match(/^\n+/)?.[0] ?? "";
+    const rest = rawSelection.slice(leadingNewline.length);
+    const trailingNewline = rest.match(/\n+$/)?.[0] ?? "";
+    const selection = trailingNewline
+      ? rest.slice(0, -trailingNewline.length)
+      : rest;
+
     if (!selection) {
       new Notice(this.i18n.t("notice.selectTextFirst"));
       return;
@@ -115,8 +137,12 @@ export default class ReviewCommentsPlugin extends Plugin {
       return;
     }
 
-    const from = editor.getCursor("from");
-    const to = editor.getCursor("to");
+    const fromOffset =
+      editor.posToOffset(editor.getCursor("from")) + leadingNewline.length;
+    const toOffset =
+      editor.posToOffset(editor.getCursor("to")) - trailingNewline.length;
+    const from = editor.offsetToPos(fromOffset);
+    const to = editor.offsetToPos(toOffset);
     const typeLabel = this.i18n.t(
       TYPES.find((t) => t.tag === typeTag)?.labelKey ?? "type.note"
     );
@@ -126,8 +152,15 @@ export default class ReviewCommentsPlugin extends Plugin {
       const prepared = prepareCommentBody(
         body.trim() || this.i18n.t("defaultCommentBody")
       );
-      const wrapped = `{==${selection}==}{>>${author}|${date}|${typeTag}: ${prepared.body}<<}`;
+      const wrapped = `{==${escapeMultiline(
+        selection
+      )}==}{>>${author}|${date}|${typeTag}: ${prepared.body}<<}`;
       editor.replaceRange(wrapped, from, to);
+      this.pendingPulseOffset = fromOffset;
+      // 選択がハイライト全体を覆ったままだと生の記法が出続けるため、記法の
+      // 直後にキャレットだけを置く。境界に接する位置は内側と見なされない
+      const insertEndPos = editor.offsetToPos(fromOffset + wrapped.length);
+      editor.setSelection(insertEndPos, insertEndPos);
       editor.focus();
       if (prepared.adjusted) {
         new Notice(this.i18n.t("notice.commentBodyAdjusted"));
