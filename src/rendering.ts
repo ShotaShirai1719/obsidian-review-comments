@@ -24,10 +24,13 @@ import {
   parseThreads,
   prepareCommentBody,
   sanitizeAuthor,
+  splitMetaBlocks,
+  threadId,
 } from "./comment-format";
 import { TYPES } from "./constants";
 import { CommentInputModal } from "./modal";
 import {
+  CommentBubbleHandlers,
   appendCommentBubble,
   renderIntoInlineContext,
 } from "./ui/comment-bubble";
@@ -229,17 +232,45 @@ export function createCommentDecorationExtension(
   );
 }
 
+/**
+ * 読み取りモードで描いたブロックと、その描画文脈。選択からノートの行を引く
+ * ために残す。ブロックが DOM から外れれば一緒に消える
+ */
+const readingSections = new WeakMap<HTMLElement, MarkdownPostProcessorContext>();
+
+/** node を含む読み取りモードのブロックと、その元の行の範囲 */
+export function findReadingSection(
+  node: Node
+): { el: HTMLElement; lineStart: number; lineEnd: number; text: string } | null {
+  let cur: HTMLElement | null =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node.parentElement;
+  while (cur) {
+    const ctx = readingSections.get(cur);
+    if (ctx) {
+      const info = ctx.getSectionInfo(cur);
+      return info ? { el: cur, ...info } : null;
+    }
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
 export async function renderCommentsInReadingMode(
   plugin: ReviewCommentsPlugin,
   el: HTMLElement,
   ctx: MarkdownPostProcessorContext
 ) {
+  readingSections.set(el, ctx);
   // MarkdownRenderer へ渡すコンポーネントは el 専属にする。ctx.addChild へ
   // 登録しておくと、このブロックが DOM から外れた時点で unload される
   const renderChild = new MarkdownRenderChild(el);
   ctx.addChild(renderChild);
   const renderTasks: Promise<void>[] = [];
   const doc = el.ownerDocument;
+
+  renderMarkSplitThreads(plugin, el, ctx, renderChild, renderTasks);
 
   // ブロック全体がちょうど1つのコメントの場合。見出し行を丸ごと囲んだときに、
   // 通常の構文解析の外側でも見出しとして描くためハイライト部分を再描画する
@@ -254,7 +285,6 @@ export async function renderCommentsInReadingMode(
     const thread = parseThreads(blockText)[0];
     if (!thread) continue;
 
-    const { entries, highlighted, rawHighlighted, full: fullMatch } = thread;
     const replaced = createDiv({ cls: "review-comment-block" });
 
     const content = replaced.createDiv({
@@ -263,50 +293,19 @@ export async function renderCommentsInReadingMode(
     renderTasks.push(
       renderIntoInlineContext(
         plugin.app,
-        highlighted,
+        thread.highlighted,
         content,
         ctx.sourcePath,
         renderChild
       )
     );
 
-    appendCommentBubble(replaced, entries, plugin.i18n, {
-      onDelete: () =>
-        void replaceCommentInFile(
-          plugin,
-          ctx.sourcePath,
-          fullMatch,
-          highlighted
-        ),
-      onEdit: () =>
-        openCommentEditModal(plugin, entries[0], (preparedBody) =>
-          void replaceCommentInFile(
-            plugin,
-            ctx.sourcePath,
-            fullMatch,
-            buildThreadWithNewBody(
-              rawHighlighted,
-              entries,
-              preparedBody,
-              fallbackMeta(plugin)
-            )
-          )
-        ),
-      onReply: () =>
-        openReplyModal(plugin, (preparedBody) =>
-          void replaceCommentInFile(
-            plugin,
-            ctx.sourcePath,
-            fullMatch,
-            buildReplyThread(
-              rawHighlighted,
-              entries,
-              preparedBody,
-              fallbackMeta(plugin)
-            )
-          )
-        ),
-    });
+    appendCommentBubble(
+      replaced,
+      thread.entries,
+      plugin.i18n,
+      readingHandlers(plugin, ctx.sourcePath, thread)
+    );
     blockEl.replaceWith(replaced);
   }
 
@@ -334,66 +333,17 @@ export async function renderCommentsInReadingMode(
         );
       }
 
-      const {
-        entries,
-        highlighted,
-        rawHighlighted,
-        full: fullMatch,
-      } = thread;
-      const span = createSpan({ cls: "review-comment-highlight" });
-
-      const content = span.createSpan({
-        cls: "review-comment-highlight-content",
-      });
-      renderTasks.push(
-        renderIntoInlineContext(
-          plugin.app,
-          highlighted,
-          content,
+      frag.appendChild(
+        createHighlightSpan(
+          plugin,
+          thread,
           ctx.sourcePath,
-          renderChild
+          renderChild,
+          renderTasks,
+          readingHandlers(plugin, ctx.sourcePath, thread)
         )
       );
-
-      appendCommentBubble(span, entries, plugin.i18n, {
-        onDelete: () =>
-          void replaceCommentInFile(
-            plugin,
-            ctx.sourcePath,
-            fullMatch,
-            highlighted
-          ),
-        onEdit: () =>
-          openCommentEditModal(plugin, entries[0], (preparedBody) =>
-            void replaceCommentInFile(
-              plugin,
-              ctx.sourcePath,
-              fullMatch,
-              buildThreadWithNewBody(
-                rawHighlighted,
-                entries,
-                preparedBody,
-                fallbackMeta(plugin)
-              )
-            )
-          ),
-        onReply: () =>
-          openReplyModal(plugin, (preparedBody) =>
-            void replaceCommentInFile(
-              plugin,
-              ctx.sourcePath,
-              fullMatch,
-              buildReplyThread(
-                rawHighlighted,
-                entries,
-                preparedBody,
-                fallbackMeta(plugin)
-              )
-            )
-          ),
-      });
-      frag.appendChild(span);
-      lastIndex = thread.offset + fullMatch.length;
+      lastIndex = thread.offset + thread.full.length;
     }
 
     if (!matched) continue;
@@ -404,6 +354,179 @@ export async function renderCommentsInReadingMode(
   }
 
   await Promise.all(renderTasks);
+}
+
+// `}` と、隙間なく続く `{>>...<<}` の連なり。描画後の文字列の先頭で探す
+const META_TAIL_REGEX = /^\}((?:\{>>[\s\S]*?<<\})+)/;
+
+function isText(node: Node | null): node is Text {
+  return node !== null && node.nodeType === Node.TEXT_NODE;
+}
+
+/**
+ * Obsidian は `{==...==}` の内側の `==...==` を先に <mark> へ描くため、記法が
+ * 「{」「<mark>」「}{>>...<<}」の3つに割れ、テキストノード単位の検索では
+ * 拾えない。割れた形を見つけて吹き出しへ置き換える。書き換えに使う記法の原文は
+ * ブロックの元の行から引き、識別子で突き合わせる
+ */
+function renderMarkSplitThreads(
+  plugin: ReviewCommentsPlugin,
+  el: HTMLElement,
+  ctx: MarkdownPostProcessorContext,
+  renderChild: MarkdownRenderChild,
+  renderTasks: Promise<void>[]
+) {
+  const info = ctx.getSectionInfo(el);
+  const sourceThreads = info
+    ? parseThreads(
+        info.text
+          .split("\n")
+          .slice(info.lineStart, info.lineEnd + 1)
+          .join("\n")
+      )
+    : [];
+  const used = new Set<CommentThread>();
+
+  for (const mark of Array.from(el.querySelectorAll("mark"))) {
+    const before = mark.previousSibling;
+    if (!isText(before) || !before.data.endsWith("{")) continue;
+    const tail = takeMetaTail(mark);
+    if (!tail) continue;
+
+    const renderedId = tail.meta.match(/rc-[0-9a-z]{6}/)?.[0] ?? null;
+    const blockCount = splitMetaBlocks(tail.meta).length;
+    const source = sourceThreads.find(
+      (t) =>
+        !used.has(t) &&
+        (renderedId
+          ? threadId(t) === renderedId
+          : threadId(t) === null && t.entries.length === blockCount)
+    );
+    // 元の行が引けないとき（埋め込みやホバーのプレビュー）は表示だけにする
+    const thread =
+      source ?? parseThreads(`{==${mark.textContent ?? ""}==}${tail.meta}`)[0];
+    if (!thread) continue;
+    if (source) used.add(source);
+
+    const span = createHighlightSpan(
+      plugin,
+      thread,
+      ctx.sourcePath,
+      renderChild,
+      renderTasks,
+      source ? readingHandlers(plugin, ctx.sourcePath, source) : {}
+    );
+    before.data = before.data.slice(0, -1);
+    if (!before.data) before.remove();
+    tail.remove();
+    mark.replaceWith(span);
+  }
+}
+
+/**
+ * mark に続く兄弟ノードから、`}` と `{>>...<<}` の連なりの分を切り出す準備を
+ * する。終わりが要素の内側に来る形は扱わない
+ */
+function takeMetaTail(
+  mark: Element
+): { meta: string; remove: () => void } | null {
+  const siblings: ChildNode[] = [];
+  let text = "";
+  for (let n = mark.nextSibling; n; n = n.nextSibling) {
+    siblings.push(n);
+    text += n.textContent ?? "";
+  }
+  const m = text.match(META_TAIL_REGEX);
+  if (!m) return null;
+
+  let rest = m[0].length;
+  const whole: ChildNode[] = [];
+  for (const n of siblings) {
+    const len = (n.textContent ?? "").length;
+    if (len <= rest) {
+      whole.push(n);
+      rest -= len;
+      if (rest === 0) break;
+      continue;
+    }
+    if (!isText(n)) return null;
+    const cut = rest;
+    return {
+      meta: m[1],
+      remove: () => {
+        whole.forEach((w) => w.remove());
+        n.data = n.data.slice(cut);
+      },
+    };
+  }
+  return { meta: m[1], remove: () => whole.forEach((w) => w.remove()) };
+}
+
+/** 地の文の一部を囲んだコメントの描画。ハイライトは Markdown として描き直す */
+function createHighlightSpan(
+  plugin: ReviewCommentsPlugin,
+  thread: CommentThread,
+  sourcePath: string,
+  renderChild: MarkdownRenderChild,
+  renderTasks: Promise<void>[],
+  handlers: CommentBubbleHandlers
+): HTMLElement {
+  const span = createSpan({ cls: "review-comment-highlight" });
+  const content = span.createSpan({
+    cls: "review-comment-highlight-content",
+  });
+  renderTasks.push(
+    renderIntoInlineContext(
+      plugin.app,
+      thread.highlighted,
+      content,
+      sourcePath,
+      renderChild
+    )
+  );
+  appendCommentBubble(span, thread.entries, plugin.i18n, handlers);
+  return span;
+}
+
+/** 読み取りモードの吹き出しから、ノートの記法を書き換える操作 */
+function readingHandlers(
+  plugin: ReviewCommentsPlugin,
+  sourcePath: string,
+  thread: CommentThread
+): CommentBubbleHandlers {
+  const { entries, highlighted, rawHighlighted, full: fullMatch } = thread;
+  return {
+    onDelete: () =>
+      void replaceCommentInFile(plugin, sourcePath, fullMatch, highlighted),
+    onEdit: () =>
+      openCommentEditModal(plugin, entries[0], (preparedBody) =>
+        void replaceCommentInFile(
+          plugin,
+          sourcePath,
+          fullMatch,
+          buildThreadWithNewBody(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+    onReply: () =>
+      openReplyModal(plugin, (preparedBody) =>
+        void replaceCommentInFile(
+          plugin,
+          sourcePath,
+          fullMatch,
+          buildReplyThread(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+  };
 }
 
 // 記法が読めなかったときに埋める投稿者と日付

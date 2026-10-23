@@ -118,7 +118,10 @@ export class FloatingBar extends Component {
         e.stopPropagation();
         const mdView = this.activeViewInThisWindow();
         this.hide();
-        if (mdView && mdView.editor.getSelection()) {
+        if (!mdView) return;
+        if (mdView.getMode() === "preview") {
+          this.plugin.addCommentToReadingSelection(mdView, t.tag);
+        } else if (mdView.editor.getSelection()) {
           this.plugin.addCommentToSelection(mdView.editor, t.tag);
         }
       });
@@ -161,12 +164,6 @@ export class FloatingBar extends Component {
       return;
     }
 
-    const selText = mdView.editor.getSelection();
-    if (!selText) {
-      this.hide();
-      return;
-    }
-
     const sel = this.win.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
       this.hide();
@@ -174,6 +171,18 @@ export class FloatingBar extends Component {
     }
 
     const range = sel.getRangeAt(0);
+    // 読み取りモードでは編集面の選択が空のまま。画面の選択がこのノートの
+    // 描画の中にあるかで判断する
+    const hasSelection =
+      mdView.getMode() === "preview"
+        ? sel.toString().trim() !== "" &&
+          mdView.previewMode.containerEl.contains(range.commonAncestorContainer)
+        : mdView.editor.getSelection() !== "";
+    if (!hasSelection) {
+      this.hide();
+      return;
+    }
+
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) {
       this.hide();

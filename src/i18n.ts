@@ -112,6 +112,7 @@ const en = {
   "settings.dictationModel": "Transcription model",
   "settings.dictationModelDesc": "The model name sent alongside the recording.",
   "notice.ambiguousComment": "The same comment markup appears more than once in this note, so it cannot be told apart. Edit it in the editor instead.",
+  "notice.readingSelectionNotFound": "Could not find the selected text in the note. Select text within one paragraph, or add the comment in editing mode.",
 };
 
 export type StringKey = keyof typeof en;
@@ -202,6 +203,7 @@ const ja: Record<StringKey, string> = {
   "settings.dictationModel": "文字起こしのモデル",
   "settings.dictationModelDesc": "録音と一緒に送るモデルの名前",
   "notice.ambiguousComment": "同じ記法がこのノートに2つ以上あり、どれを指しているか決められない。編集モードで直してください",
+  "notice.readingSelectionNotFound": "選択したテキストをノートの中で見つけられなかった。1つの段落の中で選ぶか、編集モードでコメントしてください",
 };
 
 const es: Record<StringKey, string> = {
@@ -291,6 +293,7 @@ const es: Record<StringKey, string> = {
   "settings.dictationModel": "Modelo de transcripción",
   "settings.dictationModelDesc": "El nombre del modelo que se envía junto con la grabación.",
   "notice.ambiguousComment": "El mismo marcado de comentario aparece más de una vez en esta nota, así que no se puede distinguir. Edítalo en el editor.",
+  "notice.readingSelectionNotFound": "No se encontró el texto seleccionado en la nota. Selecciona texto dentro de un párrafo o comenta en el modo de edición.",
 };
 
 const fr: Record<StringKey, string> = {
@@ -380,6 +383,7 @@ const fr: Record<StringKey, string> = {
   "settings.dictationModel": "Modèle de transcription",
   "settings.dictationModelDesc": "Le nom du modèle envoyé avec l'enregistrement.",
   "notice.ambiguousComment": "Le même balisage de commentaire apparaît plusieurs fois dans cette note, il est donc impossible de le distinguer. Modifiez-le dans l'éditeur.",
+  "notice.readingSelectionNotFound": "Le texte sélectionné est introuvable dans la note. Sélectionnez du texte dans un seul paragraphe ou commentez en mode édition.",
 };
 
 const de: Record<StringKey, string> = {
@@ -469,6 +473,7 @@ const de: Record<StringKey, string> = {
   "settings.dictationModel": "Transkriptionsmodell",
   "settings.dictationModelDesc": "Der Modellname, der mit der Aufnahme gesendet wird.",
   "notice.ambiguousComment": "Dieselbe Kommentar-Auszeichnung kommt in dieser Notiz mehrfach vor und lässt sich nicht unterscheiden. Bearbeite sie im Editor.",
+  "notice.readingSelectionNotFound": "Der markierte Text wurde in der Notiz nicht gefunden. Markiere Text innerhalb eines Absatzes oder kommentiere im Bearbeitungsmodus.",
 };
 
 const pt: Record<StringKey, string> = {
@@ -558,6 +563,7 @@ const pt: Record<StringKey, string> = {
   "settings.dictationModel": "Modelo de transcrição",
   "settings.dictationModelDesc": "O nome do modelo enviado com a gravação.",
   "notice.ambiguousComment": "A mesma marcação de comentário aparece mais de uma vez nesta nota, por isso não se consegue distinguir. Edita-a no editor.",
+  "notice.readingSelectionNotFound": "O texto selecionado não foi encontrado na nota. Seleciona texto dentro de um parágrafo ou comenta no modo de edição.",
 };
 
 const ko: Record<StringKey, string> = {
@@ -645,6 +651,7 @@ const ko: Record<StringKey, string> = {
   "settings.dictationModel": "문자 변환 모델",
   "settings.dictationModelDesc": "녹음과 함께 보내는 모델 이름",
   "notice.ambiguousComment": "같은 표기가 이 노트에 두 개 이상 있어 어느 것인지 구분할 수 없습니다. 편집 모드에서 수정하세요.",
+  "notice.readingSelectionNotFound": "선택한 텍스트를 노트에서 찾지 못했습니다. 한 단락 안에서 선택하거나 편집 모드에서 댓글을 다세요.",
 };
 
 const zh: Record<StringKey, string> = {
@@ -732,6 +739,7 @@ const zh: Record<StringKey, string> = {
   "settings.dictationModel": "转写模型",
   "settings.dictationModelDesc": "与录音一起发送的模型名称。",
   "notice.ambiguousComment": "同样的评论标记在这篇笔记中出现了多次，无法区分。请在编辑模式下修改。",
+  "notice.readingSelectionNotFound": "未能在笔记中找到所选文本。请在同一段落内选择，或在编辑模式下添加评论。",
 };
 
 const STRINGS: Record<Locale, Record<StringKey, string>> = {

@@ -1,4 +1,12 @@
-import { Editor, Notice, Plugin, TAbstractFile, TFile, debounce } from "obsidian";
+import {
+  Editor,
+  MarkdownView,
+  Notice,
+  Plugin,
+  TAbstractFile,
+  TFile,
+  debounce,
+} from "obsidian";
 import { I18n, resolveLocale } from "./i18n";
 import { TYPES, VIEW_TYPE_COMMENTS } from "./constants";
 import {
@@ -17,8 +25,16 @@ import {
 } from "./settings";
 import {
   createCommentDecorationExtension,
+  findReadingSection,
   renderCommentsInReadingMode,
 } from "./rendering";
+import {
+  LocateResult,
+  countOccurrences,
+  lineRangeToOffsets,
+  locateSelection,
+  visibleTextBefore,
+} from "./reading-selection";
 import { FloatingBar } from "./floating-bar";
 import {
   dropNotesFor,
@@ -240,16 +256,11 @@ export default class ReviewCommentsPlugin extends Plugin {
       TYPES.find((t) => t.tag === typeTag)?.labelKey ?? "type.note"
     );
     new CommentInputModal(this, typeLabel, (body) => {
-      const date = formatDate(new Date(), this.settings.dateFormat);
-      const author = sanitizeAuthor(this.settings.authorName);
-      const prepared = prepareCommentBody(
-        body.trim() || this.i18n.t("defaultCommentBody")
+      const { wrapped, adjusted } = this.newCommentMarkup(
+        selection,
+        typeTag,
+        body
       );
-      const wrapped = `{==${escapeMultiline(
-        selection
-      )}==}{>>${newCommentId()}|${author}|${date}|${typeTag}: ${
-        prepared.body
-      }<<}`;
       editor.replaceRange(wrapped, from, to);
       this.pendingPulseOffset = fromOffset;
       // 選択がハイライト全体を覆ったままだと生の記法が出続けるため、記法の
@@ -257,9 +268,102 @@ export default class ReviewCommentsPlugin extends Plugin {
       const insertEndPos = editor.offsetToPos(fromOffset + wrapped.length);
       editor.setSelection(insertEndPos, insertEndPos);
       editor.focus();
-      if (prepared.adjusted) {
+      if (adjusted) {
         new Notice(this.i18n.t("notice.commentBodyAdjusted"));
       }
+    }).open();
+  }
+
+  /** 新しいコメント1件の記法。編集モードと読み取りモードが共有する */
+  private newCommentMarkup(
+    selection: string,
+    typeTag: string,
+    body: string
+  ): { wrapped: string; adjusted: boolean } {
+    const date = formatDate(new Date(), this.settings.dateFormat);
+    const author = sanitizeAuthor(this.settings.authorName);
+    const prepared = prepareCommentBody(
+      body.trim() || this.i18n.t("defaultCommentBody")
+    );
+    const wrapped = `{==${escapeMultiline(
+      selection
+    )}==}{>>${newCommentId()}|${author}|${date}|${typeTag}: ${
+      prepared.body
+    }<<}`;
+    return { wrapped, adjusted: prepared.adjusted };
+  }
+
+  /**
+   * 読み取りモードの選択へコメントを付ける。編集面が無いため、選択をブロックの
+   * 元の行の中で探して記法の位置へ戻し、Vault.process で書き込む
+   */
+  addCommentToReadingSelection(view: MarkdownView, typeTag: string = "NOTE") {
+    const file = view.file;
+    const sel = view.containerEl.win.getSelection();
+    if (!file || !sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      new Notice(this.i18n.t("notice.selectTextFirst"));
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const selected = range.toString();
+    if (!selected.trim()) {
+      new Notice(this.i18n.t("notice.selectTextFirst"));
+      return;
+    }
+
+    // 段落をまたぐ選択は記法へ戻すと改行が潰れる。1つのブロックの中に限る
+    const section = findReadingSection(range.startContainer);
+    if (!section || findReadingSection(range.endContainer)?.el !== section.el) {
+      new Notice(this.i18n.t("notice.readingSelectionNotFound"));
+      return;
+    }
+    const occurrence = countOccurrences(
+      visibleTextBefore(section.el, range),
+      selected
+    );
+    const locate = (data: string): LocateResult => {
+      const block = lineRangeToOffsets(data, section.lineStart, section.lineEnd);
+      return block
+        ? locateSelection(data, block.from, block.to, selected, occurrence)
+        : { error: "notFound" };
+    };
+
+    // 本文を書かせる前に確かめる。書き終えてから断ると入力が無駄になる
+    const found = locate(section.text);
+    if ("error" in found) {
+      new Notice(
+        this.i18n.t(
+          found.error === "nested"
+            ? "notice.alreadyHasComment"
+            : "notice.readingSelectionNotFound"
+        )
+      );
+      return;
+    }
+    const target = section.text.slice(found.from, found.to);
+
+    const typeLabel = this.i18n.t(
+      TYPES.find((t) => t.tag === typeTag)?.labelKey ?? "type.note"
+    );
+    new CommentInputModal(this, typeLabel, (body) => {
+      const { wrapped, adjusted } = this.newCommentMarkup(target, typeTag, body);
+      void (async () => {
+        let changed = false;
+        await this.app.vault.process(file, (data) => {
+          const at = locate(data);
+          if ("error" in at || data.slice(at.from, at.to) !== target) {
+            changed = true;
+            return data;
+          }
+          return data.slice(0, at.from) + wrapped + data.slice(at.to);
+        });
+        view.containerEl.win.getSelection()?.removeAllRanges();
+        if (changed) {
+          new Notice(this.i18n.t("notice.noteChangedDuringEdit"));
+        } else if (adjusted) {
+          new Notice(this.i18n.t("notice.commentBodyAdjusted"));
+        }
+      })();
     }).open();
   }
 

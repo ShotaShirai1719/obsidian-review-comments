@@ -173,6 +173,12 @@
   margin: 0;
 }
 
+/* Reading view: 地の文の一部を囲んだケース。ポップオーバーの位置の基準にする。
+   無いと遠くの祖先が基準になり、開いても吹き出しの近くに出ない */
+.review-comment-highlight {
+  position: relative;
+}
+
 /* Reading view: ブロックごとコメントで囲んだケース */
 .review-comment-block {
   position: relative;
