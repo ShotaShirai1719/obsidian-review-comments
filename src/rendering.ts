@@ -316,6 +316,8 @@ export async function renderCommentsInReadingMode(
   const renderTasks: Promise<void>[] = [];
   const doc = el.ownerDocument;
 
+  repairSplitHighlights(el);
+
   // ブロック全体がちょうど1つのコメントの場合。見出し行を丸ごと囲んだときに、
   // 通常の構文解析の外側でも見出しとして描くためハイライト部分を再描画する
   const wholeBlockRegex = new RegExp(`^${COMMENT_THREAD_REGEX.source}$`);
@@ -481,6 +483,31 @@ export async function renderCommentsInReadingMode(
   await Promise.all(renderTasks);
 }
 
+/**
+ * Obsidian は `{==X==}` の内側の `==X==` を自前のハイライトとして描き、
+ * `{` `<mark>X</mark>` `}{>>...<<}` に割ってしまう。テキストノード単位の
+ * 検出に掛かるよう、記法の形に戻した1つのテキストノードへ繋ぎ直す
+ */
+function repairSplitHighlights(el: HTMLElement) {
+  const doc = el.ownerDocument;
+  for (const mark of Array.from(el.querySelectorAll("mark"))) {
+    const prev = mark.previousSibling;
+    const next = mark.nextSibling;
+    if (!prev || prev.nodeType !== Node.TEXT_NODE) continue;
+    if (!next || next.nodeType !== Node.TEXT_NODE) continue;
+    const before = prev.textContent ?? "";
+    const after = next.textContent ?? "";
+    if (!before.endsWith("{") || !after.startsWith("}{>>")) continue;
+    const merged = doc.createTextNode(
+      `${before.slice(0, -1)}{==${mark.textContent ?? ""}==}${after.slice(1)}`
+    );
+    mark.parentNode?.insertBefore(merged, prev);
+    prev.remove();
+    mark.remove();
+    next.remove();
+  }
+}
+
 // 記法が読めなかったときに埋める投稿者と日付
 function fallbackMeta(plugin: ReviewCommentsPlugin) {
   return {
@@ -556,6 +583,13 @@ async function replaceCommentInFile(
 
   let ambiguous = false;
   await plugin.app.vault.process(file, (data) => {
+    // 表のセルでは `|` が `\|` と書かれ、描画後のテキストからは `\` が消える。
+    // そのままで見つからなければ、表の書き方に戻して探す
+    if (data.indexOf(fullMatch) === -1) {
+      const escapePipes = (s: string) => s.replace(/(?<!\\)\|/g, "\\|");
+      fullMatch = escapePipes(fullMatch);
+      replacement = escapePipes(replacement);
+    }
     const at = data.indexOf(fullMatch);
     if (at === -1) return data;
     // 同じ記法が2つあると、押した吹き出しと違う方を書き換える。識別子が付いた
