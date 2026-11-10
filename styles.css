@@ -555,3 +555,22 @@
   user-select: text;
   cursor: text;
 }
+
+/* Obsidian の button:not(.clickable-icon) のほうが詳細度が高く、背景が
+   --interactive-normal で塗られる。多くのテーマで --interactive-hover と同じ色
+   のため、押せる印が出ない。詳細度を上げて平常は透明、hover で色を付ける */
+.review-comment-bubble-popover .review-comment-bubble-popover-btn {
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.review-comment-bubble-popover .review-comment-bubble-popover-btn:hover {
+  background: var(--background-modifier-hover, rgba(0, 0, 0, 0.08));
+  color: var(--text-normal);
+}
+
+.review-comment-bubble-popover .review-comment-bubble-popover-delete:hover {
+  background: color-mix(in srgb, var(--text-error, #e64646) 15%, transparent);
+  color: var(--text-error, #e64646);
+}
