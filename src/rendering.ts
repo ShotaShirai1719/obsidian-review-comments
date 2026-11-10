@@ -93,6 +93,29 @@ class CommentWidget extends WidgetType {
       this.renderComponent
     );
 
+    // ignoreEvent が true なので CodeMirror はこの widget 上のクリックを扱わない。
+    // 本文部分を押したときは、押した位置に対応する生テキストの中へカーソルを置く。
+    // カーソルが内側へ入れば buildDecorations が生の記法に切り替える
+    content.addEventListener("mousedown", (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("a, button, .review-comment-bubble-popover")) return;
+      e.preventDefault();
+      const renderedOffset = renderedOffsetAtPoint(content, e.clientX, e.clientY);
+      const rawOffset = mapRenderedToRaw(
+        content.textContent ?? "",
+        this.rawHighlighted,
+        renderedOffset
+      );
+      const textStart = this.range.from + 3;
+      const anchor = Math.min(
+        Math.max(textStart + rawOffset, this.range.from + 1),
+        this.range.to - 1
+      );
+      view.dispatch({ selection: { anchor } });
+      view.focus();
+    });
+
     const replaceRange = (insert: string) =>
       view.dispatch({
         changes: { from: this.range.from, to: this.range.to, insert },
@@ -134,6 +157,58 @@ class CommentWidget extends WidgetType {
   ignoreEvent(): boolean {
     return true;
   }
+}
+
+// 押した座標が container の描画テキストの何文字目かを返す。取れなければ末尾
+function renderedOffsetAtPoint(
+  container: HTMLElement,
+  x: number,
+  y: number
+): number {
+  const doc = container.ownerDocument;
+  const total = container.textContent?.length ?? 0;
+  let node: Node | null = null;
+  let offset = 0;
+  const anyDoc = doc as Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof anyDoc.caretPositionFromPoint === "function") {
+    const pos = anyDoc.caretPositionFromPoint(x, y);
+    if (pos) {
+      node = pos.offsetNode;
+      offset = pos.offset;
+    }
+  } else if (typeof doc.caretRangeFromPoint === "function") {
+    const r = doc.caretRangeFromPoint(x, y);
+    if (r) {
+      node = r.startContainer;
+      offset = r.startOffset;
+    }
+  }
+  if (!node || !container.contains(node)) return total;
+  const range = doc.createRange();
+  range.setStart(container, 0);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
+// 描画テキストの位置を生テキストの位置へ寄せる。** などの記法の文字は描画に
+// 出ないので、生テキスト側を先へ進めながら同じ文字を突き合わせる
+function mapRenderedToRaw(
+  rendered: string,
+  raw: string,
+  renderedOffset: number
+): number {
+  let j = 0;
+  for (let i = 0; i < renderedOffset && i < rendered.length; i++) {
+    const found = raw.indexOf(rendered[i], j);
+    if (found === -1) break;
+    j = found + 1;
+  }
+  return Math.min(j, raw.length);
 }
 
 export function createCommentDecorationExtension(
