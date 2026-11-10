@@ -528,3 +528,21 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* ハイライトの中を編集しているときに、畳んだ記法の代わりに出す吹き出し */
+.review-comment-tail.review-comment-anchor {
+  position: relative;
+  display: inline-block;
+  vertical-align: baseline;
+  background-color: transparent;
+  border-bottom: none;
+  margin-left: 2px;
+}
+
+/* 表のセルなど overflow で切られる場所でも見えるよう、開いたときは画面に
+   固定して置く。位置は開くときに吹き出しボタンから計算する */
+.review-comment-bubble-popover.is-open {
+  position: fixed;
+  margin-top: 0;
+  z-index: var(--layer-popover, 30);
+}

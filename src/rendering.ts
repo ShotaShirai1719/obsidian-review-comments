@@ -5,6 +5,7 @@ import {
   MarkdownView,
   Notice,
   editorInfoField,
+  editorLivePreviewField,
 } from "obsidian";
 import {
   Decoration,
@@ -14,7 +15,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
+import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import { COMMENT_THREAD_REGEX } from "./constants";
 import {
   CommentThread,
@@ -29,7 +30,9 @@ import {
 import { TYPES } from "./constants";
 import { CommentInputModal } from "./modal";
 import {
+  CommentBubbleHandlers,
   appendCommentBubble,
+  discardCommentPopover,
   renderIntoInlineContext,
 } from "./ui/comment-bubble";
 import type ReviewCommentsPlugin from "./main";
@@ -117,42 +120,26 @@ class CommentWidget extends WidgetType {
       view.focus();
     });
 
-    const replaceRange = (insert: string) =>
-      view.dispatch({
-        changes: { from: this.range.from, to: this.range.to, insert },
-      });
-
-    appendCommentBubble(wrapper, this.entries, this.plugin.i18n, {
-      onDelete: () => replaceRange(this.highlighted),
-      onEdit: () =>
-        openCommentEditModal(this.plugin, this.entries[0], (preparedBody) =>
-          replaceRange(
-            buildThreadWithNewBody(
-              this.rawHighlighted,
-              this.entries,
-              preparedBody,
-              fallbackMeta(this.plugin)
-            )
-          )
-        ),
-      onReply: () =>
-        openReplyModal(this.plugin, (preparedBody) =>
-          replaceRange(
-            buildReplyThread(
-              this.rawHighlighted,
-              this.entries,
-              preparedBody,
-              fallbackMeta(this.plugin)
-            )
-          )
-        ),
-    });
+    appendCommentBubble(
+      wrapper,
+      this.entries,
+      this.plugin.i18n,
+      editorBubbleHandlers(
+        view,
+        this.plugin,
+        this.range,
+        this.highlighted,
+        this.rawHighlighted,
+        this.entries
+      )
+    );
     return wrapper;
   }
 
-  destroy(): void {
+  destroy(dom: HTMLElement): void {
     this.renderComponent?.unload();
     this.renderComponent = null;
+    discardCommentPopover(dom);
   }
 
   ignoreEvent(): boolean {
@@ -212,12 +199,151 @@ function mapRenderedToRaw(
   return Math.min(j, raw.length);
 }
 
+// 編集画面の吹き出しから記法を書き換える。範囲は描いた時点の位置
+function editorBubbleHandlers(
+  view: EditorView,
+  plugin: ReviewCommentsPlugin,
+  range: { from: number; to: number },
+  highlighted: string,
+  rawHighlighted: string,
+  entries: ParsedMeta[]
+): CommentBubbleHandlers {
+  const replaceRange = (insert: string) =>
+    view.dispatch({ changes: { from: range.from, to: range.to, insert } });
+  return {
+    onDelete: () => replaceRange(highlighted),
+    onEdit: () =>
+      openCommentEditModal(plugin, entries[0], (preparedBody) =>
+        replaceRange(
+          buildThreadWithNewBody(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+    onReply: () =>
+      openReplyModal(plugin, (preparedBody) =>
+        replaceRange(
+          buildReplyThread(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+  };
+}
+
+/**
+ * ハイライトの中を編集しているあいだ、`==}{>>...<<}` の代わりに出す吹き出し。
+ * 本文だけを見せ、コメントの中身は吹き出しから開く
+ */
+class CommentTailWidget extends WidgetType {
+  constructor(
+    private readonly highlighted: string,
+    private readonly rawHighlighted: string,
+    private readonly entries: ParsedMeta[],
+    private readonly plugin: ReviewCommentsPlugin,
+    private readonly range: { from: number; to: number }
+  ) {
+    super();
+  }
+
+  eq(other: CommentTailWidget): boolean {
+    return (
+      other.rawHighlighted === this.rawHighlighted &&
+      other.range.from === this.range.from &&
+      other.range.to === this.range.to &&
+      other.entries.length === this.entries.length &&
+      other.entries.every((e, i) => {
+        const mine = this.entries[i];
+        return e.id === mine.id && e.type === mine.type && e.body === mine.body;
+      })
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrapper = createSpan({ cls: "review-comment-tail" });
+    appendCommentBubble(
+      wrapper,
+      this.entries,
+      this.plugin.i18n,
+      editorBubbleHandlers(
+        view,
+        this.plugin,
+        this.range,
+        this.highlighted,
+        this.rawHighlighted,
+        this.entries
+      )
+    );
+    return wrapper;
+  }
+
+  destroy(dom: HTMLElement): void {
+    discardCommentPopover(dom);
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+const isLivePreview = (state: EditorState) =>
+  state.field(editorLivePreviewField, false) ?? true;
+
+/**
+ * 実時間プレビューでハイライトの中を編集しているときに隠す範囲。`{==` と
+ * `==}{>>...<<}` の2つで、どちらも1文字ずつ消すと記法が壊れる
+ */
+function hiddenMarkupRanges(
+  state: EditorState,
+  threads: CommentThread[]
+): { from: number; to: number }[] {
+  if (!isLivePreview(state)) return [];
+  const ranges = state.selection.ranges;
+  const result: { from: number; to: number }[] = [];
+  for (const thread of threads) {
+    const start = thread.offset;
+    const end = start + thread.full.length;
+    if (thread.full.includes("\n")) continue;
+    if (!ranges.some((r) => r.from < end && r.to > start)) continue;
+    const textEnd = start + 3 + thread.rawHighlighted.length;
+    result.push({ from: start, to: start + 3 }, { from: textEnd, to: end });
+  }
+  return result;
+}
+
+/**
+ * 隠した記法の境目で退格や Delete を押すと、見えない記号だけが消えて記法が
+ * 壊れる。消す範囲が隠した記法の内側に収まる削除だけを止める。記法ごと
+ * 選んで消すような大きい削除はそのまま通す
+ */
+export const protectHiddenMarkup = EditorState.changeFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent("delete")) return true;
+  const doc = tr.startState.doc.toString();
+  if (doc.indexOf("{==") === -1) return true;
+  const hidden = hiddenMarkupRanges(tr.startState, parseThreads(doc));
+  if (hidden.length === 0) return true;
+  let onlyHidden = true;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    const inside = hidden.some((h) => fromA >= h.from && toA <= h.to);
+    if (!inside || inserted.length > 0) onlyHidden = false;
+  });
+  return !onlyHidden;
+});
+
 export function createCommentDecorationExtension(
   plugin: ReviewCommentsPlugin
 ) {
-  return ViewPlugin.fromClass(
+  const commentPlugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      // 隠した記法を1文字ずつ跨がず、まとめて飛ばすための範囲
+      atomic: DecorationSet = Decoration.none;
       // 記法の解析結果。本文が変わったときだけ作り直す。カーソルを動かすたびに
       // 全文を文字列化して正規表現を当てると、大きいノートで打鍵ごとに効く
       private threads: CommentThread[];
@@ -234,7 +360,8 @@ export function createCommentDecorationExtension(
         if (
           update.docChanged ||
           update.viewportChanged ||
-          update.selectionSet
+          update.selectionSet ||
+          isLivePreview(update.startState) !== isLivePreview(update.state)
         ) {
           this.decorations = this.buildDecorations(update.view);
         }
@@ -242,9 +369,12 @@ export function createCommentDecorationExtension(
 
       buildDecorations(view: EditorView): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
+        const atomicBuilder = new RangeSetBuilder<Decoration>();
         const ranges = view.state.selection.ranges;
         const info = view.state.field(editorInfoField, false);
         const sourcePath = info?.file?.path ?? "";
+        // ソースモードでは記法をそのまま見せる。コメントの中身を手で直す入口
+        const livePreview = isLivePreview(view.state);
 
         for (const thread of this.threads) {
           const start = thread.offset;
@@ -256,7 +386,33 @@ export function createCommentDecorationExtension(
           // 記法への保険。Decoration.replace は改行をまたぐ範囲を置き換えられない
           const spansMultipleLines = thread.full.includes("\n");
 
-          if (cursorInside || spansMultipleLines) {
+          if (livePreview && cursorInside && !spansMultipleLines) {
+            // ハイライトの中を編集中。本文だけを出し、前後の記法は畳んで
+            // 末尾に吹き出しを置く
+            const textStart = start + 3;
+            const textEnd = textStart + thread.rawHighlighted.length;
+            const hideOpen = Decoration.replace({});
+            const tail = Decoration.replace({
+              widget: new CommentTailWidget(
+                thread.highlighted,
+                thread.rawHighlighted,
+                thread.entries,
+                plugin,
+                { from: start, to: end }
+              ),
+            });
+            builder.add(start, textStart, hideOpen);
+            if (textEnd > textStart) {
+              builder.add(
+                textStart,
+                textEnd,
+                Decoration.mark({ class: "review-comment-highlight-live" })
+              );
+            }
+            builder.add(textEnd, end, tail);
+            atomicBuilder.add(start, textStart, hideOpen);
+            atomicBuilder.add(textEnd, end, tail);
+          } else if (!livePreview || cursorInside || spansMultipleLines) {
             const highlightTextStart = start + 3;
             const highlightTextEnd =
               highlightTextStart + thread.rawHighlighted.length;
@@ -296,6 +452,7 @@ export function createCommentDecorationExtension(
           }
         }
 
+        this.atomic = atomicBuilder.finish();
         return builder.finish();
       }
     },
@@ -303,6 +460,13 @@ export function createCommentDecorationExtension(
       decorations: (v) => v.decorations,
     }
   );
+  return [
+    commentPlugin,
+    EditorView.atomicRanges.of(
+      (view) => view.plugin(commentPlugin)?.atomic ?? Decoration.none
+    ),
+    protectHiddenMarkup,
+  ];
 }
 
 export async function renderCommentsInReadingMode(
