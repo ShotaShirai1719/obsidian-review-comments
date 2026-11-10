@@ -546,3 +546,12 @@
   margin-top: 0;
   z-index: var(--layer-popover, 30);
 }
+
+/* Obsidian は body で文字選択を切っている。body へ移した吹き出しの本文と
+   投稿者の行は選んでコピーできるように戻す */
+.review-comment-bubble-popover-header,
+.review-comment-bubble-popover-body {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
