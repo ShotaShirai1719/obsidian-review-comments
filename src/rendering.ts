@@ -2,6 +2,7 @@ import {
   Component,
   MarkdownPostProcessorContext,
   MarkdownRenderChild,
+  MarkdownView,
   Notice,
   editorInfoField,
 } from "obsidian";
@@ -317,6 +318,12 @@ export async function renderCommentsInReadingMode(
   const doc = el.ownerDocument;
 
   repairSplitHighlights(el);
+  // 描画後のテキストからは ** などの記法と表の `\` が消えている。識別子で
+  // ノートの記法を引き当て、描画と書き戻しにはそちらを使う
+  const source = el.textContent?.includes("{==")
+    ? await loadSourceText(plugin, ctx.sourcePath)
+    : null;
+  const sourceThreads = source ? parseThreads(source) : [];
 
   // ブロック全体がちょうど1つのコメントの場合。見出し行を丸ごと囲んだときに、
   // 通常の構文解析の外側でも見出しとして描くためハイライト部分を再描画する
@@ -328,8 +335,9 @@ export async function renderCommentsInReadingMode(
   for (const blockEl of blockCandidates) {
     const blockText = blockEl.textContent || "";
     if (!wholeBlockRegex.test(blockText)) continue;
-    const thread = parseThreads(blockText)[0];
-    if (!thread) continue;
+    const parsed = parseThreads(blockText)[0];
+    if (!parsed) continue;
+    const thread = resolveFromSource(parsed, sourceThreads);
 
     const { entries, highlighted, rawHighlighted, full: fullMatch } = thread;
     const replaced = createDiv({ cls: "review-comment-block" });
@@ -403,8 +411,9 @@ export async function renderCommentsInReadingMode(
     const frag = createFragment();
     let matched = false;
 
-    for (const thread of parseThreads(text)) {
+    for (const parsed of parseThreads(text)) {
       matched = true;
+      const thread = resolveFromSource(parsed, sourceThreads);
       if (thread.offset > lastIndex) {
         frag.appendChild(
           doc.createTextNode(text.slice(lastIndex, thread.offset))
@@ -470,7 +479,8 @@ export async function renderCommentsInReadingMode(
           ),
       });
       frag.appendChild(span);
-      lastIndex = thread.offset + fullMatch.length;
+      // 位置は描画後のテキスト上で数える。ノート側の記法とは長さが違う
+      lastIndex = parsed.offset + parsed.full.length;
     }
 
     if (!matched) continue;
@@ -506,6 +516,48 @@ function repairSplitHighlights(el: HTMLElement) {
     mark.remove();
     next.remove();
   }
+}
+
+// 開いている編集画面の内容を優先する。保存前の変更も含めて最新を読める
+async function loadSourceText(
+  plugin: ReviewCommentsPlugin,
+  sourcePath: string
+): Promise<string | null> {
+  for (const leaf of plugin.app.workspace.getLeavesOfType("markdown")) {
+    const view = leaf.view as MarkdownView;
+    if (view.file?.path === sourcePath && view.editor) {
+      return view.editor.getValue();
+    }
+  }
+  const file = plugin.app.vault.getFileByPath(sourcePath);
+  return file ? plugin.app.vault.cachedRead(file) : null;
+}
+
+const escapePipes = (s: string) => s.replace(/(?<!\\)\|/g, "\\|");
+
+// 表のセルの中の記法は区切りの `|` が `\|` と書かれる
+const isTableEscaped = (full: string) => /\{>>[^|]*?\\\|/.test(full);
+
+/**
+ * 描画後のテキストから読んだスレッドを、識別子が一致するノート側の記法で
+ * 置き換える。識別子が無い、または見つからないときはそのまま返す
+ */
+function resolveFromSource(
+  parsed: CommentThread,
+  sourceThreads: CommentThread[]
+): CommentThread {
+  const id = parsed.entries[0]?.id;
+  if (!id) return parsed;
+  const hit = sourceThreads.find(
+    (t) => t.full.includes(`{>>${id}|`) || t.full.includes(`{>>${id}\\|`)
+  );
+  if (!hit) return parsed;
+  return {
+    ...parsed,
+    highlighted: hit.highlighted,
+    rawHighlighted: hit.rawHighlighted,
+    full: hit.full,
+  };
 }
 
 // 記法が読めなかったときに埋める投稿者と日付
@@ -586,8 +638,10 @@ async function replaceCommentInFile(
     // 表のセルでは `|` が `\|` と書かれ、描画後のテキストからは `\` が消える。
     // そのままで見つからなければ、表の書き方に戻して探す
     if (data.indexOf(fullMatch) === -1) {
-      const escapePipes = (s: string) => s.replace(/(?<!\\)\|/g, "\\|");
       fullMatch = escapePipes(fullMatch);
+    }
+    // 組み直した記法は区切りが素の `|` なので、表の中なら表の書き方へ揃える
+    if (isTableEscaped(fullMatch)) {
       replacement = escapePipes(replacement);
     }
     const at = data.indexOf(fullMatch);
