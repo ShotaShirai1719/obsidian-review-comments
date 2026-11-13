@@ -76,7 +76,7 @@ Switching the language updates the floating bar, the comment modal, notices, the
 2. Click the **💬 Comment** button that appears near the selection
 3. Enter your comment in the modal. Multiline notes and bullet lists are supported.
 
-To change a comment you have already written, open the side panel, press **Edit** on its card, rewrite the body and press **Save** (`Cmd/Ctrl + Enter` saves, `Esc` cancels). The author and the date recorded on the comment are kept as they were. If the note itself changed while the card was open, the edit is refused instead of overwriting the wrong range.
+To change a comment you have already written, open the side panel, press **Edit** on its card, rewrite the body and press **Save** (`Enter` saves, `Shift + Enter` adds a new line, `Esc` cancels). The author and the date recorded on the comment are kept as they were. If the note itself changed while the card was open, the edit is refused instead of overwriting the wrong range.
 
 Alternatively:
 

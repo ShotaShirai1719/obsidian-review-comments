@@ -19,6 +19,7 @@ import {
 import { CommentInputModal } from "./modal";
 import { attachDictationButton } from "./dictation";
 import { appendResolved } from "./store";
+import { isSubmitEnter } from "./keys";
 
 // 打鍵ごとに全文を読み直すと大きなノートで重くなるため、少し待ってから描画する
 const RENDER_DELAY_MS = 150;
@@ -228,7 +229,7 @@ export class CommentsView extends ItemView {
     });
 
     textarea.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      if (isSubmitEnter(e)) {
         e.preventDefault();
         save();
         return;
