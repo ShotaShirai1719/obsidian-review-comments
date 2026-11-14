@@ -175,12 +175,71 @@ export function appendCommentBubble(
     e.stopPropagation();
     const isOpen = popover.hasClass("is-open");
     closeAllCommentPopovers(container.ownerDocument);
-    if (!isOpen) popover.addClass("is-open");
+    if (!isOpen) {
+      // 表のセルは contain: paint で中身を切り、fixed でも抜け出せない。
+      // 開いているあいだだけ body へ移し、閉じるときに元へ戻す
+      popoverHome.set(popover, container);
+      openPopoverOf.set(container, popover);
+      container.ownerDocument.body.appendChild(popover);
+      popover.addClass("is-open");
+      placePopover(btn, popover);
+    }
   });
+}
+
+/**
+ * 開いた吹き出しを画面に固定して置く。表のセルは overflow で中身を切るため、
+ * 親を基準にした absolute だと隠れる。下に入らなければ上へ、右端は画面内へ寄せる
+ */
+function placePopover(btn: HTMLElement, popover: HTMLElement) {
+  const win = btn.ownerDocument.defaultView ?? window;
+  const margin = 8;
+  const rect = btn.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  const height = popover.offsetHeight;
+  let left = rect.left;
+  if (left + width > win.innerWidth - margin) {
+    left = Math.max(margin, win.innerWidth - margin - width);
+  }
+  let top = rect.bottom + 4;
+  if (top + height > win.innerHeight - margin && rect.top - 4 - height >= margin) {
+    top = rect.top - 4 - height;
+  }
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+  // 祖先に transform や contain があると fixed の基準が画面からずれる。
+  // 置いた結果を測り、ずれた分だけ戻す
+  const placed = popover.getBoundingClientRect();
+  popover.style.left = `${left - (placed.left - left)}px`;
+  popover.style.top = `${top - (placed.top - top)}px`;
+}
+
+// body へ移した吹き出しの持ち主。閉じたら持ち主の中へ戻す
+const popoverHome = new WeakMap<HTMLElement, HTMLElement>();
+// 持ち主から、body へ移した吹き出しを引く。持ち主が捨てられたときに消すため
+const openPopoverOf = new WeakMap<HTMLElement, HTMLElement>();
+
+/** 持ち主の DOM を捨てるときに呼ぶ。body へ移した吹き出しを残さない */
+export function discardCommentPopover(container: HTMLElement) {
+  const popover = openPopoverOf.get(container);
+  if (!popover) return;
+  openPopoverOf.delete(container);
+  popoverHome.delete(popover);
+  popover.remove();
 }
 
 export function closeAllCommentPopovers(doc: Document) {
   doc
-    .querySelectorAll(".review-comment-bubble-popover.is-open")
-    .forEach((el) => el.removeClass("is-open"));
+    .querySelectorAll<HTMLElement>(".review-comment-bubble-popover.is-open")
+    .forEach((el) => {
+      el.removeClass("is-open");
+      const home = popoverHome.get(el);
+      if (home) {
+        popoverHome.delete(el);
+        openPopoverOf.delete(home);
+        // 持ち主が描き直しで捨てられていたら、戻さずに消す
+        if (home.isConnected) home.appendChild(el);
+        else el.remove();
+      }
+    });
 }

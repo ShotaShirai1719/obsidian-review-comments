@@ -2,8 +2,10 @@ import {
   Component,
   MarkdownPostProcessorContext,
   MarkdownRenderChild,
+  MarkdownView,
   Notice,
   editorInfoField,
+  editorLivePreviewField,
 } from "obsidian";
 import {
   Decoration,
@@ -13,7 +15,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
+import { EditorState, RangeSetBuilder } from "@codemirror/state";
 import { COMMENT_THREAD_REGEX } from "./constants";
 import {
   CommentThread,
@@ -28,7 +30,9 @@ import {
 import { TYPES } from "./constants";
 import { CommentInputModal } from "./modal";
 import {
+  CommentBubbleHandlers,
   appendCommentBubble,
+  discardCommentPopover,
   renderIntoInlineContext,
 } from "./ui/comment-bubble";
 import type ReviewCommentsPlugin from "./main";
@@ -93,42 +97,49 @@ class CommentWidget extends WidgetType {
       this.renderComponent
     );
 
-    const replaceRange = (insert: string) =>
-      view.dispatch({
-        changes: { from: this.range.from, to: this.range.to, insert },
-      });
-
-    appendCommentBubble(wrapper, this.entries, this.plugin.i18n, {
-      onDelete: () => replaceRange(this.highlighted),
-      onEdit: () =>
-        openCommentEditModal(this.plugin, this.entries[0], (preparedBody) =>
-          replaceRange(
-            buildThreadWithNewBody(
-              this.rawHighlighted,
-              this.entries,
-              preparedBody,
-              fallbackMeta(this.plugin)
-            )
-          )
-        ),
-      onReply: () =>
-        openReplyModal(this.plugin, (preparedBody) =>
-          replaceRange(
-            buildReplyThread(
-              this.rawHighlighted,
-              this.entries,
-              preparedBody,
-              fallbackMeta(this.plugin)
-            )
-          )
-        ),
+    // ignoreEvent が true なので CodeMirror はこの widget 上のクリックを扱わない。
+    // 本文部分を押したときは、押した位置に対応する生テキストの中へカーソルを置く。
+    // カーソルが内側へ入れば buildDecorations が生の記法に切り替える
+    content.addEventListener("mousedown", (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("a, button, .review-comment-bubble-popover")) return;
+      e.preventDefault();
+      const renderedOffset = renderedOffsetAtPoint(content, e.clientX, e.clientY);
+      const rawOffset = mapRenderedToRaw(
+        content.textContent ?? "",
+        this.rawHighlighted,
+        renderedOffset
+      );
+      const textStart = this.range.from + 3;
+      const anchor = Math.min(
+        Math.max(textStart + rawOffset, this.range.from + 1),
+        this.range.to - 1
+      );
+      view.dispatch({ selection: { anchor } });
+      view.focus();
     });
+
+    appendCommentBubble(
+      wrapper,
+      this.entries,
+      this.plugin.i18n,
+      editorBubbleHandlers(
+        view,
+        this.plugin,
+        this.range,
+        this.highlighted,
+        this.rawHighlighted,
+        this.entries
+      )
+    );
     return wrapper;
   }
 
-  destroy(): void {
+  destroy(dom: HTMLElement): void {
     this.renderComponent?.unload();
     this.renderComponent = null;
+    discardCommentPopover(dom);
   }
 
   ignoreEvent(): boolean {
@@ -136,12 +147,203 @@ class CommentWidget extends WidgetType {
   }
 }
 
+// 押した座標が container の描画テキストの何文字目かを返す。取れなければ末尾
+function renderedOffsetAtPoint(
+  container: HTMLElement,
+  x: number,
+  y: number
+): number {
+  const doc = container.ownerDocument;
+  const total = container.textContent?.length ?? 0;
+  let node: Node | null = null;
+  let offset = 0;
+  const anyDoc = doc as Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof anyDoc.caretPositionFromPoint === "function") {
+    const pos = anyDoc.caretPositionFromPoint(x, y);
+    if (pos) {
+      node = pos.offsetNode;
+      offset = pos.offset;
+    }
+  } else if (typeof doc.caretRangeFromPoint === "function") {
+    const r = doc.caretRangeFromPoint(x, y);
+    if (r) {
+      node = r.startContainer;
+      offset = r.startOffset;
+    }
+  }
+  if (!node || !container.contains(node)) return total;
+  const range = doc.createRange();
+  range.setStart(container, 0);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
+// 描画テキストの位置を生テキストの位置へ寄せる。** などの記法の文字は描画に
+// 出ないので、生テキスト側を先へ進めながら同じ文字を突き合わせる
+function mapRenderedToRaw(
+  rendered: string,
+  raw: string,
+  renderedOffset: number
+): number {
+  let j = 0;
+  for (let i = 0; i < renderedOffset && i < rendered.length; i++) {
+    const found = raw.indexOf(rendered[i], j);
+    if (found === -1) break;
+    j = found + 1;
+  }
+  return Math.min(j, raw.length);
+}
+
+// 編集画面の吹き出しから記法を書き換える。範囲は描いた時点の位置
+function editorBubbleHandlers(
+  view: EditorView,
+  plugin: ReviewCommentsPlugin,
+  range: { from: number; to: number },
+  highlighted: string,
+  rawHighlighted: string,
+  entries: ParsedMeta[]
+): CommentBubbleHandlers {
+  const replaceRange = (insert: string) =>
+    view.dispatch({ changes: { from: range.from, to: range.to, insert } });
+  return {
+    onDelete: () => replaceRange(highlighted),
+    onEdit: () =>
+      openCommentEditModal(plugin, entries[0], (preparedBody) =>
+        replaceRange(
+          buildThreadWithNewBody(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+    onReply: () =>
+      openReplyModal(plugin, (preparedBody) =>
+        replaceRange(
+          buildReplyThread(
+            rawHighlighted,
+            entries,
+            preparedBody,
+            fallbackMeta(plugin)
+          )
+        )
+      ),
+  };
+}
+
+/**
+ * ハイライトの中を編集しているあいだ、`==}{>>...<<}` の代わりに出す吹き出し。
+ * 本文だけを見せ、コメントの中身は吹き出しから開く
+ */
+class CommentTailWidget extends WidgetType {
+  constructor(
+    private readonly highlighted: string,
+    private readonly rawHighlighted: string,
+    private readonly entries: ParsedMeta[],
+    private readonly plugin: ReviewCommentsPlugin,
+    private readonly range: { from: number; to: number }
+  ) {
+    super();
+  }
+
+  eq(other: CommentTailWidget): boolean {
+    return (
+      other.rawHighlighted === this.rawHighlighted &&
+      other.range.from === this.range.from &&
+      other.range.to === this.range.to &&
+      other.entries.length === this.entries.length &&
+      other.entries.every((e, i) => {
+        const mine = this.entries[i];
+        return e.id === mine.id && e.type === mine.type && e.body === mine.body;
+      })
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrapper = createSpan({ cls: "review-comment-tail" });
+    appendCommentBubble(
+      wrapper,
+      this.entries,
+      this.plugin.i18n,
+      editorBubbleHandlers(
+        view,
+        this.plugin,
+        this.range,
+        this.highlighted,
+        this.rawHighlighted,
+        this.entries
+      )
+    );
+    return wrapper;
+  }
+
+  destroy(dom: HTMLElement): void {
+    discardCommentPopover(dom);
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+const isLivePreview = (state: EditorState) =>
+  state.field(editorLivePreviewField, false) ?? true;
+
+/**
+ * 実時間プレビューでハイライトの中を編集しているときに隠す範囲。`{==` と
+ * `==}{>>...<<}` の2つで、どちらも1文字ずつ消すと記法が壊れる
+ */
+function hiddenMarkupRanges(
+  state: EditorState,
+  threads: CommentThread[]
+): { from: number; to: number }[] {
+  if (!isLivePreview(state)) return [];
+  const ranges = state.selection.ranges;
+  const result: { from: number; to: number }[] = [];
+  for (const thread of threads) {
+    const start = thread.offset;
+    const end = start + thread.full.length;
+    if (thread.full.includes("\n")) continue;
+    if (!ranges.some((r) => r.from < end && r.to > start)) continue;
+    const textEnd = start + 3 + thread.rawHighlighted.length;
+    result.push({ from: start, to: start + 3 }, { from: textEnd, to: end });
+  }
+  return result;
+}
+
+/**
+ * 隠した記法の境目で退格や Delete を押すと、見えない記号だけが消えて記法が
+ * 壊れる。消す範囲が隠した記法の内側に収まる削除だけを止める。記法ごと
+ * 選んで消すような大きい削除はそのまま通す
+ */
+export const protectHiddenMarkup = EditorState.changeFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent("delete")) return true;
+  const doc = tr.startState.doc.toString();
+  if (doc.indexOf("{==") === -1) return true;
+  const hidden = hiddenMarkupRanges(tr.startState, parseThreads(doc));
+  if (hidden.length === 0) return true;
+  let onlyHidden = true;
+  tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+    const inside = hidden.some((h) => fromA >= h.from && toA <= h.to);
+    if (!inside || inserted.length > 0) onlyHidden = false;
+  });
+  return !onlyHidden;
+});
+
 export function createCommentDecorationExtension(
   plugin: ReviewCommentsPlugin
 ) {
-  return ViewPlugin.fromClass(
+  const commentPlugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      // 隠した記法を1文字ずつ跨がず、まとめて飛ばすための範囲
+      atomic: DecorationSet = Decoration.none;
       // 記法の解析結果。本文が変わったときだけ作り直す。カーソルを動かすたびに
       // 全文を文字列化して正規表現を当てると、大きいノートで打鍵ごとに効く
       private threads: CommentThread[];
@@ -158,7 +360,8 @@ export function createCommentDecorationExtension(
         if (
           update.docChanged ||
           update.viewportChanged ||
-          update.selectionSet
+          update.selectionSet ||
+          isLivePreview(update.startState) !== isLivePreview(update.state)
         ) {
           this.decorations = this.buildDecorations(update.view);
         }
@@ -166,9 +369,12 @@ export function createCommentDecorationExtension(
 
       buildDecorations(view: EditorView): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
+        const atomicBuilder = new RangeSetBuilder<Decoration>();
         const ranges = view.state.selection.ranges;
         const info = view.state.field(editorInfoField, false);
         const sourcePath = info?.file?.path ?? "";
+        // ソースモードでは記法をそのまま見せる。コメントの中身を手で直す入口
+        const livePreview = isLivePreview(view.state);
 
         for (const thread of this.threads) {
           const start = thread.offset;
@@ -180,7 +386,33 @@ export function createCommentDecorationExtension(
           // 記法への保険。Decoration.replace は改行をまたぐ範囲を置き換えられない
           const spansMultipleLines = thread.full.includes("\n");
 
-          if (cursorInside || spansMultipleLines) {
+          if (livePreview && cursorInside && !spansMultipleLines) {
+            // ハイライトの中を編集中。本文だけを出し、前後の記法は畳んで
+            // 末尾に吹き出しを置く
+            const textStart = start + 3;
+            const textEnd = textStart + thread.rawHighlighted.length;
+            const hideOpen = Decoration.replace({});
+            const tail = Decoration.replace({
+              widget: new CommentTailWidget(
+                thread.highlighted,
+                thread.rawHighlighted,
+                thread.entries,
+                plugin,
+                { from: start, to: end }
+              ),
+            });
+            builder.add(start, textStart, hideOpen);
+            if (textEnd > textStart) {
+              builder.add(
+                textStart,
+                textEnd,
+                Decoration.mark({ class: "review-comment-highlight-live" })
+              );
+            }
+            builder.add(textEnd, end, tail);
+            atomicBuilder.add(start, textStart, hideOpen);
+            atomicBuilder.add(textEnd, end, tail);
+          } else if (!livePreview || cursorInside || spansMultipleLines) {
             const highlightTextStart = start + 3;
             const highlightTextEnd =
               highlightTextStart + thread.rawHighlighted.length;
@@ -220,6 +452,7 @@ export function createCommentDecorationExtension(
           }
         }
 
+        this.atomic = atomicBuilder.finish();
         return builder.finish();
       }
     },
@@ -227,6 +460,13 @@ export function createCommentDecorationExtension(
       decorations: (v) => v.decorations,
     }
   );
+  return [
+    commentPlugin,
+    EditorView.atomicRanges.of(
+      (view) => view.plugin(commentPlugin)?.atomic ?? Decoration.none
+    ),
+    protectHiddenMarkup,
+  ];
 }
 
 export async function renderCommentsInReadingMode(
@@ -241,6 +481,14 @@ export async function renderCommentsInReadingMode(
   const renderTasks: Promise<void>[] = [];
   const doc = el.ownerDocument;
 
+  repairSplitHighlights(el);
+  // 描画後のテキストからは ** などの記法と表の `\` が消えている。識別子で
+  // ノートの記法を引き当て、描画と書き戻しにはそちらを使う
+  const source = el.textContent?.includes("{==")
+    ? await loadSourceText(plugin, ctx.sourcePath)
+    : null;
+  const sourceThreads = source ? parseThreads(source) : [];
+
   // ブロック全体がちょうど1つのコメントの場合。見出し行を丸ごと囲んだときに、
   // 通常の構文解析の外側でも見出しとして描くためハイライト部分を再描画する
   const wholeBlockRegex = new RegExp(`^${COMMENT_THREAD_REGEX.source}$`);
@@ -251,8 +499,9 @@ export async function renderCommentsInReadingMode(
   for (const blockEl of blockCandidates) {
     const blockText = blockEl.textContent || "";
     if (!wholeBlockRegex.test(blockText)) continue;
-    const thread = parseThreads(blockText)[0];
-    if (!thread) continue;
+    const parsed = parseThreads(blockText)[0];
+    if (!parsed) continue;
+    const thread = resolveFromSource(parsed, sourceThreads);
 
     const { entries, highlighted, rawHighlighted, full: fullMatch } = thread;
     const replaced = createDiv({ cls: "review-comment-block" });
@@ -326,8 +575,9 @@ export async function renderCommentsInReadingMode(
     const frag = createFragment();
     let matched = false;
 
-    for (const thread of parseThreads(text)) {
+    for (const parsed of parseThreads(text)) {
       matched = true;
+      const thread = resolveFromSource(parsed, sourceThreads);
       if (thread.offset > lastIndex) {
         frag.appendChild(
           doc.createTextNode(text.slice(lastIndex, thread.offset))
@@ -393,7 +643,8 @@ export async function renderCommentsInReadingMode(
           ),
       });
       frag.appendChild(span);
-      lastIndex = thread.offset + fullMatch.length;
+      // 位置は描画後のテキスト上で数える。ノート側の記法とは長さが違う
+      lastIndex = parsed.offset + parsed.full.length;
     }
 
     if (!matched) continue;
@@ -404,6 +655,73 @@ export async function renderCommentsInReadingMode(
   }
 
   await Promise.all(renderTasks);
+}
+
+/**
+ * Obsidian は `{==X==}` の内側の `==X==` を自前のハイライトとして描き、
+ * `{` `<mark>X</mark>` `}{>>...<<}` に割ってしまう。テキストノード単位の
+ * 検出に掛かるよう、記法の形に戻した1つのテキストノードへ繋ぎ直す
+ */
+function repairSplitHighlights(el: HTMLElement) {
+  const doc = el.ownerDocument;
+  for (const mark of Array.from(el.querySelectorAll("mark"))) {
+    const prev = mark.previousSibling;
+    const next = mark.nextSibling;
+    if (!prev || prev.nodeType !== Node.TEXT_NODE) continue;
+    if (!next || next.nodeType !== Node.TEXT_NODE) continue;
+    const before = prev.textContent ?? "";
+    const after = next.textContent ?? "";
+    if (!before.endsWith("{") || !after.startsWith("}{>>")) continue;
+    const merged = doc.createTextNode(
+      `${before.slice(0, -1)}{==${mark.textContent ?? ""}==}${after.slice(1)}`
+    );
+    mark.parentNode?.insertBefore(merged, prev);
+    prev.remove();
+    mark.remove();
+    next.remove();
+  }
+}
+
+// 開いている編集画面の内容を優先する。保存前の変更も含めて最新を読める
+async function loadSourceText(
+  plugin: ReviewCommentsPlugin,
+  sourcePath: string
+): Promise<string | null> {
+  for (const leaf of plugin.app.workspace.getLeavesOfType("markdown")) {
+    const view = leaf.view as MarkdownView;
+    if (view.file?.path === sourcePath && view.editor) {
+      return view.editor.getValue();
+    }
+  }
+  const file = plugin.app.vault.getFileByPath(sourcePath);
+  return file ? plugin.app.vault.cachedRead(file) : null;
+}
+
+const escapePipes = (s: string) => s.replace(/(?<!\\)\|/g, "\\|");
+
+// 表のセルの中の記法は区切りの `|` が `\|` と書かれる
+const isTableEscaped = (full: string) => /\{>>[^|]*?\\\|/.test(full);
+
+/**
+ * 描画後のテキストから読んだスレッドを、識別子が一致するノート側の記法で
+ * 置き換える。識別子が無い、または見つからないときはそのまま返す
+ */
+function resolveFromSource(
+  parsed: CommentThread,
+  sourceThreads: CommentThread[]
+): CommentThread {
+  const id = parsed.entries[0]?.id;
+  if (!id) return parsed;
+  const hit = sourceThreads.find(
+    (t) => t.full.includes(`{>>${id}|`) || t.full.includes(`{>>${id}\\|`)
+  );
+  if (!hit) return parsed;
+  return {
+    ...parsed,
+    highlighted: hit.highlighted,
+    rawHighlighted: hit.rawHighlighted,
+    full: hit.full,
+  };
 }
 
 // 記法が読めなかったときに埋める投稿者と日付
@@ -481,6 +799,15 @@ async function replaceCommentInFile(
 
   let ambiguous = false;
   await plugin.app.vault.process(file, (data) => {
+    // 表のセルでは `|` が `\|` と書かれ、描画後のテキストからは `\` が消える。
+    // そのままで見つからなければ、表の書き方に戻して探す
+    if (data.indexOf(fullMatch) === -1) {
+      fullMatch = escapePipes(fullMatch);
+    }
+    // 組み直した記法は区切りが素の `|` なので、表の中なら表の書き方へ揃える
+    if (isTableEscaped(fullMatch)) {
+      replacement = escapePipes(replacement);
+    }
     const at = data.indexOf(fullMatch);
     if (at === -1) return data;
     // 同じ記法が2つあると、押した吹き出しと違う方を書き換える。識別子が付いた

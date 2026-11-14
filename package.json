@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node esbuild.config.mjs production",
+    "deploy": "node esbuild.config.mjs production && node scripts/deploy.mjs"
   },
   "keywords": [
     "obsidian",

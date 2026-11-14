@@ -64,9 +64,20 @@ export class FloatingBar extends Component {
       }, COMPOSITION_END_GRACE_MS);
     });
 
-    this.registerDomEvent(this.win, "scroll", () => this.hide(), {
-      capture: true,
-    });
+    // 吹き出しは画面に固定して置くので、本文が流れたら閉じる。吹き出しの
+    // 中のスクロールでは閉じない
+    this.registerDomEvent(
+      this.win,
+      "scroll",
+      (e: Event) => {
+        this.hide();
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest?.(".review-comment-bubble-popover")) {
+          closeAllCommentPopovers(this.doc);
+        }
+      },
+      { capture: true }
+    );
 
     this.registerDomEvent(this.doc, "keydown", (e: KeyboardEvent) => {
       if (e.key === "Escape") this.hide();
@@ -76,7 +87,10 @@ export class FloatingBar extends Component {
     // ごとに要る。コメントのアンカーの外を押したときだけ閉じる
     this.registerDomEvent(this.doc, "click", (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (!target || !target.closest(".review-comment-anchor")) {
+      if (
+        !target ||
+        !target.closest(".review-comment-anchor, .review-comment-bubble-popover")
+      ) {
         closeAllCommentPopovers(this.doc);
       }
     });

@@ -2,6 +2,7 @@ import { Modal } from "obsidian";
 import { attachDictationButton } from "./dictation";
 import type ReviewCommentsPlugin from "./main";
 import { I18n } from "./i18n";
+import { isSubmitEnter } from "./keys";
 
 export interface CommentInputModalOptions {
   // 渡すと編集として開く。未指定なら新規追加
@@ -76,7 +77,7 @@ export class CommentInputModal extends Modal {
     cancelBtn.addEventListener("click", () => this.close());
     submitBtn.addEventListener("click", () => this.submit(textarea.value));
     textarea.addEventListener("keydown", (evt: KeyboardEvent) => {
-      if ((evt.metaKey || evt.ctrlKey) && evt.key === "Enter") {
+      if (isSubmitEnter(evt)) {
         evt.preventDefault();
         this.submit(textarea.value);
       }
